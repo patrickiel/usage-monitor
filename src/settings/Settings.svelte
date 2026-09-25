@@ -88,7 +88,9 @@
     const ids = ordered(config.order).map((p) => p.id);
     const i = ids.indexOf(drag.id);
     const rows = [...list.children] as HTMLElement[];
+    const self = rows[i];
     const listTop = list.getBoundingClientRect().top;
+    let slotTop = self.offsetTop;
     // Swap with a neighbour once the cursor passes its middle (offsetTop ignores transforms).
     for (const j of [i - 1, i + 1]) {
       const row = rows[j];
@@ -96,13 +98,18 @@
       const mid = listTop + row.offsetTop + row.offsetHeight / 2;
       if ((j > i && e.clientY > mid) || (j < i && e.clientY < mid)) {
         // Our slot moves by the distance between the two rows; keep the row under the cursor.
-        drag.startY += row.offsetTop - rows[i].offsetTop;
+        const shift = row.offsetTop - self.offsetTop;
+        drag.startY += shift;
+        slotTop += shift;
         [ids[i], ids[j]] = [ids[j], ids[i]];
         config.order = ids;
         break;
       }
     }
-    drag.offset = e.clientY - drag.startY;
+    // Keep the row inside the list: no further than its first and last slot.
+    const min = -slotTop;
+    const max = list.clientHeight - self.offsetHeight - slotTop;
+    drag.offset = Math.min(max, Math.max(min, e.clientY - drag.startY));
   }
 
   async function toggleAutostart() {
@@ -256,6 +263,14 @@
         >
           <span>Pace marker</span>
           <input type="checkbox" bind:checked={config.showPace} class="size-4 accent-emerald-500" />
+        </label>
+        <label class="flex items-center justify-between">
+          <span>Show percentages</span>
+          <input type="checkbox" bind:checked={config.showPercent} class="size-4 accent-emerald-500" />
+        </label>
+        <label class="flex items-center justify-between">
+          <span>Show times</span>
+          <input type="checkbox" bind:checked={config.showTimes} class="size-4 accent-emerald-500" />
         </label>
       </section>
     </div>

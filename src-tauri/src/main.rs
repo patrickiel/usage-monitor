@@ -48,19 +48,55 @@ fn tray_icon(light: bool) -> Image<'static> {
     if light { TRAY_LIGHT } else { TRAY_DARK }
 }
 
-/// Background loop (every 2 s):
-/// - the taskbar is itself topmost and wins the z-order whenever it is clicked,
-///   so push the overlay back above it (without activating it);
-/// - swap the tray icon when the taskbar switches between light and dark.
-fn watch(tray: TrayIcon, overlay_hwnd: isize, mut light: bool) {
+/// The taskbar is itself topmost and jumps above the overlay whenever it's clicked (the overlay
+/// is click-through, so clicking it clicks the taskbar). Push the overlay back on top, without
+/// activating it, the moment the foreground changes.
+#[cfg(windows)]
+mod topmost {
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SetWindowPos, EVENT_SYSTEM_FOREGROUND, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        WINEVENT_OUTOFCONTEXT,
+    };
+
+    static OVERLAY: AtomicIsize = AtomicIsize::new(0);
+
+    pub fn raise() {
+        let hwnd = OVERLAY.load(Ordering::Relaxed);
+        if hwnd != 0 {
+            unsafe { SetWindowPos(hwnd as _, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+        }
+    }
+
+    unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
+        raise();
+    }
+
+    /// Call on the main thread: out-of-context hooks are delivered through its message loop.
+    pub fn install(hwnd: isize) {
+        OVERLAY.store(hwnd, Ordering::Relaxed);
+        unsafe {
+            SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                std::ptr::null_mut(),
+                Some(on_foreground),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
+        }
+    }
+}
+
+/// Background loop (every 2 s): a backstop for staying on top (for z-order changes that aren't
+/// foreground switches), and swapping the tray icon when the taskbar turns light or dark.
+fn watch(tray: TrayIcon, mut light: bool) {
     std::thread::spawn(move || loop {
         #[cfg(windows)]
-        unsafe {
-            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-            };
-            SetWindowPos(overlay_hwnd as _, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        }
+        topmost::raise();
         let now = taskbar_is_light();
         if now != light {
             light = now;
@@ -116,10 +152,8 @@ fn main() {
             let overlay = app.get_webview_window("overlay").unwrap();
             overlay.set_ignore_cursor_events(true)?;
             #[cfg(windows)]
-            let hwnd = overlay.hwnd()?.0 as isize;
-            #[cfg(not(windows))]
-            let hwnd = 0;
-            watch(tray, hwnd, light);
+            topmost::install(overlay.hwnd()?.0 as isize);
+            watch(tray, light);
 
             Ok(())
         })

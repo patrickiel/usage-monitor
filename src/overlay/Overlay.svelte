@@ -129,7 +129,7 @@
             <!-- One row per limit: label · bar (optional pace tick) · percent · reset -->
             <div
               class="grid items-center gap-x-1.5 gap-y-[3px]"
-              style:grid-template-columns="auto {config.barWidth}px auto auto"
+              style:grid-template-columns="auto {config.barWidth}px{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
             >
               {#each s.bars.map((b) => current(b, now)) as bar (bar.label)}
                 {@const sev = severity(bar.percent)}
@@ -152,12 +152,16 @@
                     ></div>
                   {/if}
                 </div>
-                <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
-                  {Math.round(bar.percent)}%
-                </span>
-                <span class="text-right text-neutral-500 dark:text-white/40">
-                  {bar.detail ?? (bar.resetsAt ? countdown(bar.resetsAt, now) : '')}
-                </span>
+                {#if config.showPercent}
+                  <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
+                    {Math.round(bar.percent)}%
+                  </span>
+                {/if}
+                {#if config.showTimes}
+                  <span class="text-right text-neutral-500 dark:text-white/40">
+                    {bar.detail ?? (bar.resetsAt ? countdown(bar.resetsAt, now) : '')}
+                  </span>
+                {/if}
               {/each}
             </div>
           {:else if s}

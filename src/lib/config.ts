@@ -24,6 +24,10 @@ export interface Config {
   refreshSeconds: number;
   /** Tick on each bar marking how much of the window has elapsed. */
   showPace: boolean;
+  /** Percentage column next to each bar. */
+  showPercent: boolean;
+  /** Reset countdown column (and extra usage $ amounts). */
+  showTimes: boolean;
   theme: Theme;
   /** Provider ids in display order (drag to reorder in settings). */
   order: string[];
@@ -42,6 +46,8 @@ export const defaults: Config = {
   opacity: 0,
   refreshSeconds: 120,
   showPace: false,
+  showPercent: true,
+  showTimes: true,
   theme: 'auto',
   order: [],
   providers: {},
