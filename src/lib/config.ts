@@ -1,5 +1,6 @@
 import { load } from '@tauri-apps/plugin-store';
 import { emit, listen } from '@tauri-apps/api/event';
+import type { Theme } from './theme';
 
 export type Anchor =
   | 'top-left' | 'top-center' | 'top-right'
@@ -23,6 +24,7 @@ export interface Config {
   refreshSeconds: number;
   /** Tick on each bar marking how much of the window has elapsed. */
   showPace: boolean;
+  theme: Theme;
   /** Provider id → enabled. Missing ids count as enabled. */
   providers: Record<string, boolean>;
 }
@@ -38,6 +40,7 @@ export const defaults: Config = {
   opacity: 0.6,
   refreshSeconds: 120,
   showPace: false,
+  theme: 'auto',
   providers: {},
 };
 

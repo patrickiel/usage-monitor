@@ -8,6 +8,7 @@
   import type { Provider, UsageSnapshot } from '../providers/types';
   import { loadConfig, onConfigChanged, type Config } from '../lib/config';
   import { place } from '../lib/placement';
+  import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
   import { ago, barColors, countdown, current, pace, severity } from '../lib/format';
 
@@ -76,6 +77,10 @@
     return () => ro.disconnect();
   }
 
+  $effect(() => {
+    if (config) setTheme(config.theme);
+  });
+
   // Re-dock on any config/size change, and once a minute to follow monitor changes.
   $effect(() => {
     if (!config || !size.width) return;
@@ -90,31 +95,31 @@
 {#if config}
   <div
     {@attach measure}
-    class="w-max font-mono text-[10px] leading-none text-white/85 select-none"
+    class="w-max font-mono text-[10px] leading-none text-neutral-800 select-none dark:text-white/85"
     style:zoom={config.scale}
   >
     <div
-      class="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5"
-      style:background-color="rgba(16, 16, 18, {config.opacity})"
+      class="flex items-center gap-2.5 rounded-lg bg-neutral-50/(--alpha) px-2.5 py-1.5 dark:bg-[#101012]/(--alpha)"
+      style:--alpha="{config.opacity * 100}%"
     >
       {#each active as p, i (p.id)}
         {@const s = snapshots[p.id]}
-        {#if i}<div class="h-7 w-px bg-white/10"></div>{/if}
+        {#if i}<div class="h-7 w-px bg-black/10 dark:bg-white/10"></div>{/if}
 
         <div class="flex items-center gap-2">
           <!-- Provider: icon, then only what needs attention (stale/error, resets left). -->
           <div class="flex flex-col items-center gap-1">
-            <p.icon size="1.7em" weight="bold" color={p.accent ?? '#fff'} />
+            <p.icon size="1.7em" weight="bold" color={p.accent ?? 'currentColor'} />
             {#if !s}
-              <CircleNotchIcon size="1.1em" class="animate-spin text-white/40" />
+              <CircleNotchIcon size="1.1em" class="animate-spin text-neutral-400 dark:text-white/40" />
             {:else if s.error || now - s.fetchedAt.getTime() > STALE_MS}
               <!-- amber: showing last known data; red: nothing to show -->
-              <span class={['flex items-center gap-0.5', s.bars.length ? 'text-amber-400' : 'text-red-400']}>
+              <span class={['flex items-center gap-0.5', s.bars.length ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400']}>
                 <WarningCircleIcon size="1.1em" weight="bold" />{ago(s.fetchedAt, now)}
               </span>
             {/if}
             {#if s?.resetsAvailable != null}
-              <span class="flex items-center gap-0.5 text-sky-300">
+              <span class="flex items-center gap-0.5 text-sky-600 dark:text-sky-300">
                 <ClockCounterClockwiseIcon size="1.1em" weight="bold" />{s.resetsAvailable}
               </span>
             {/if}
@@ -130,8 +135,8 @@
                 {@const sev = severity(bar.percent)}
                 {@const color = barColors[sev]}
                 {@const tick = config.showPace ? pace(bar, now) : null}
-                <span class="text-white/45">{bar.label}</span>
-                <div class="relative bg-white/10" style:height="{config.barHeight}px">
+                <span class="text-neutral-500 dark:text-white/45">{bar.label}</span>
+                <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
                   <div
                     class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
                     style:width="{Math.min(100, bar.percent)}%"
@@ -139,19 +144,19 @@
                     style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
                   ></div>
                   {#if tick != null}
-                    <div class="absolute -inset-y-0.5 w-px bg-white/70" style:left="{tick}%"></div>
+                    <div class="absolute -inset-y-0.5 w-px bg-black/60 dark:bg-white/70" style:left="{tick}%"></div>
                   {/if}
                 </div>
                 <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
                   {Math.round(bar.percent)}%
                 </span>
-                <span class="text-right text-white/40">
+                <span class="text-right text-neutral-500 dark:text-white/40">
                   {bar.detail ?? (bar.resetsAt ? countdown(bar.resetsAt, now) : '')}
                 </span>
               {/each}
             </div>
           {:else if s}
-            <span class="text-white/50">{s.error ?? 'no limits'}</span>
+            <span class="text-neutral-500 dark:text-white/50">{s.error ?? 'no limits'}</span>
           {/if}
         </div>
       {/each}
@@ -162,5 +167,6 @@
 <style>
   :global(html, body) {
     background: transparent;
+    overflow: hidden;
   }
 </style>

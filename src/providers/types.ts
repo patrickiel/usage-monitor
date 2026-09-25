@@ -31,7 +31,7 @@ export interface Provider {
   name: string;
   /** Shown in the overlay instead of the name (a Phosphor icon or compatible component). */
   icon: Component<IconComponentProps>;
-  /** Icon color. */
+  /** Icon color; defaults to the text color, which follows the theme. */
   accent?: string;
   fetch(): Promise<UsageSnapshot>;
 }

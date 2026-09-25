@@ -38,8 +38,9 @@ export function severity(percent: number): Severity {
   return percent >= 90 ? 'crit' : percent >= 70 ? 'warn' : 'ok';
 }
 
+/** CSS variables defined in app.css, so they follow the theme. */
 export const barColors: Record<Severity, string> = {
-  ok: '#34d399',
-  warn: '#fbbf24',
-  crit: '#f87171',
+  ok: 'var(--sev-ok)',
+  warn: 'var(--sev-warn)',
+  crit: 'var(--sev-crit)',
 };

@@ -114,7 +114,6 @@ export const codex: Provider = {
   id: 'codex',
   name: 'Codex',
   icon: OpenAiLogoIcon,
-  accent: '#e5e5e5',
   async fetch() {
     const auth = await readHomeJson<Auth>('.codex/auth.json').catch(() => null);
     const snapshot =
