@@ -7,12 +7,21 @@
   --sev-ok: #059669;
   --sev-warn: #d97706;
   --sev-crit: #dc2626;
+  /* Pace marker: own palette so it stands out on the bar fill. */
+  --pace-ok: #0284c7;
+  --pace-warn: #7c3aed;
+  --pace-crit: #db2777;
+  --pace-outline: #fafafa;
 }
 
 :root.dark {
   --sev-ok: #34d399;
   --sev-warn: #fbbf24;
   --sev-crit: #f87171;
+  --pace-ok: #38bdf8;
+  --pace-warn: #a78bfa;
+  --pace-crit: #f472b6;
+  --pace-outline: #101012;
 }
 
 html,

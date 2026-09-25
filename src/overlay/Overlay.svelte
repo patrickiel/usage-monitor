@@ -4,13 +4,13 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
   import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
-  import { providers } from '../providers';
+  import { ordered } from '../providers';
   import type { Provider, UsageSnapshot } from '../providers/types';
   import { loadConfig, onConfigChanged, type Config } from '../lib/config';
   import { place } from '../lib/placement';
   import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
-  import { ago, barColors, countdown, current, pace, severity } from '../lib/format';
+  import { ago, barColors, countdown, current, pace, paceColor, severity } from '../lib/format';
 
   /** Data older than this gets an age badge even without an error. */
   const STALE_MS = 10 * 60 * 1000;
@@ -20,7 +20,7 @@
   let now = $state(Date.now());
   let size = $state({ width: 0, height: 0 });
 
-  const active = $derived(config ? providers.filter((p) => config!.providers[p.id] !== false) : []);
+  const active = $derived(config ? ordered(config.order).filter((p) => config!.providers[p.id] !== false) : []);
 
   async function refreshOne(p: Provider) {
     let next: UsageSnapshot;
@@ -144,7 +144,12 @@
                     style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
                   ></div>
                   {#if tick != null}
-                    <div class="absolute -inset-y-0.5 w-px bg-black/60 dark:bg-white/70" style:left="{tick}%"></div>
+                    <div
+                      class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2"
+                      style:left="{tick}%"
+                      style:background-color={paceColor(bar.percent, tick)}
+                      style:box-shadow="0 0 0 1px var(--pace-outline)"
+                    ></div>
                   {/if}
                 </div>
                 <span class="text-right" style:color={sev === 'ok' ? undefined : color}>

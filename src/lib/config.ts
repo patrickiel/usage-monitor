@@ -25,22 +25,25 @@ export interface Config {
   /** Tick on each bar marking how much of the window has elapsed. */
   showPace: boolean;
   theme: Theme;
+  /** Provider ids in display order (drag to reorder in settings). */
+  order: string[];
   /** Provider id → enabled. Missing ids count as enabled. */
   providers: Record<string, boolean>;
 }
 
 export const defaults: Config = {
   monitor: '',
-  anchor: 'bottom-right',
+  anchor: 'bottom-left',
   offsetX: 0,
   offsetY: 0,
   barWidth: 48,
-  barHeight: 4,
+  barHeight: 7,
   scale: 1,
-  opacity: 0.6,
+  opacity: 0,
   refreshSeconds: 120,
   showPace: false,
   theme: 'auto',
+  order: [],
   providers: {},
 };
 

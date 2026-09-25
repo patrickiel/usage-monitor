@@ -38,6 +38,19 @@ export function severity(percent: number): Severity {
   return percent >= 90 ? 'crit' : percent >= 70 ? 'warn' : 'ok';
 }
 
+/**
+ * Pace marker color, blended continuously from the usage projected to the end of the window:
+ * sky at 0%, violet at 100% (on track to hit the limit exactly), pink at 130%+.
+ * Early in a window the projection is noise, so it only counts after 10% has elapsed.
+ */
+export function paceColor(percent: number, elapsed: number): string {
+  const projected = elapsed < 10 ? 0 : (percent / elapsed) * 100;
+  const t = (from: number, to: number) => Math.round(Math.min(1, Math.max(0, (projected - from) / (to - from))) * 100);
+  return projected <= 100
+    ? `color-mix(in oklch, var(--pace-warn) ${t(0, 100)}%, var(--pace-ok))`
+    : `color-mix(in oklch, var(--pace-crit) ${t(100, 130)}%, var(--pace-warn))`;
+}
+
 /** CSS variables defined in app.css, so they follow the theme. */
 export const barColors: Record<Severity, string> = {
   ok: 'var(--sev-ok)',
