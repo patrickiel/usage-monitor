@@ -31,8 +31,10 @@
     }
     // On failure (e.g. rate limited) keep showing the last known bars and their age.
     const prev = snapshots[p.id];
-    if (next.error && !next.bars.length && prev?.bars.length) {
-      snapshots[p.id] = { ...prev, error: next.error };
+    // A failed or empty result never replaces newer good data (e.g. an old log fallback).
+    const worse = next.error || !next.bars.length;
+    if (worse && prev?.bars.length && (!next.bars.length || prev.fetchedAt >= next.fetchedAt)) {
+      snapshots[p.id] = { ...prev, error: next.error ?? 'no data' };
       return;
     }
     snapshots[p.id] = next;

@@ -56,14 +56,16 @@ const sessionBar = (w: SessionWindow | undefined, fallback: string, at: Date) =>
     fallback,
   );
 
-async function fromApi(auth: Auth): Promise<UsageSnapshot | null> {
+/** A snapshot, or a short reason why the endpoint gave none. */
+async function fromApi(auth: Auth): Promise<UsageSnapshot | string> {
   const token = auth.tokens?.access_token;
-  if (!token) return null;
+  if (!token) return 'not signed in';
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (auth.tokens?.account_id) headers['ChatGPT-Account-Id'] = auth.tokens.account_id;
 
   const res = await fetch('https://chatgpt.com/backend-api/wham/usage', { headers });
-  if (!res.ok) return null;
+  if (res.status === 401) return 'token expired · run codex';
+  if (!res.ok) return `http ${res.status}`;
   const data = (await res.json()) as {
     rate_limit?: { primary_window?: ApiWindow; secondary_window?: ApiWindow };
     rate_limit_reset_credits?: { available_count?: number; credits?: unknown[] } | null;
@@ -102,10 +104,9 @@ async function fromSessions(): Promise<UsageSnapshot | null> {
     const limits = entry.payload?.rate_limits;
     if (!limits) continue;
     const at = toDate(entry.timestamp) ?? new Date();
-    return {
-      bars: [...sessionBar(limits.primary, '5h', at), ...sessionBar(limits.secondary, '7d', at)],
-      fetchedAt: at,
-    };
+    const bars = [...sessionBar(limits.primary, '5h', at), ...sessionBar(limits.secondary, '7d', at)];
+    // Some entries carry no windows (e.g. `primary: null`); keep looking further back.
+    if (bars.length) return { bars, fetchedAt: at };
   }
   return null;
 }
@@ -116,8 +117,10 @@ export const codex: Provider = {
   icon: OpenAiLogoIcon,
   async fetch() {
     const auth = await readHomeJson<Auth>('.codex/auth.json').catch(() => null);
-    const snapshot =
-      (auth && (await fromApi(auth).catch(() => null))) ?? (await fromSessions().catch(() => null));
-    return snapshot ?? { bars: [], error: auth ? 'no data' : 'not signed in', fetchedAt: new Date() };
+    const api = auth ? await fromApi(auth).catch(() => 'offline') : 'not signed in';
+    if (typeof api !== 'string') return api;
+    // Endpoint failed: the session log is older but better than nothing; keep the reason visible.
+    const logged = await fromSessions().catch(() => null);
+    return logged ? { ...logged, error: api } : { bars: [], error: api, fetchedAt: new Date() };
   },
 };

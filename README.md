@@ -5,6 +5,13 @@ It lives in the system tray; there is no main window.
 
 Built with Tauri 2, Svelte 5 and Tailwind 4.
 
+![Overlay on the taskbar](docs/overlay.png)
+
+Each row is one limit window: used percentage and time until it resets. Bars turn amber at 70%
+and red at 90%. An optional pace marker shows how much of the window has elapsed.
+
+![Settings](docs/settings.png)
+
 ## Data sources
 
 Claude
@@ -36,6 +43,9 @@ pnpm tauri dev
 pnpm check      # svelte-check
 pnpm release    # installer in src-tauri/target/release/bundle/nsis
 ```
+
+`VITE_DEMO=1 pnpm tauri dev` replaces provider data with fixed sample values
+(`src/providers/demo.ts`), which is how the screenshots above were taken.
 
 ## Adding a provider
 
