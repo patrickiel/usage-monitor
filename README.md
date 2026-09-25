@@ -1,6 +1,7 @@
 # Usage Monitor
 
-A small Windows overlay that shows Claude Code and Codex rate limits on top of the taskbar.
+A small Windows overlay that shows AI coding plan rate limits (Claude Code, Codex, Antigravity,
+Cursor, GitHub Copilot, z.ai GLM, Kimi Code) on top of the taskbar.
 It lives in the system tray; there is no main window.
 
 Built with Tauri 2, Svelte 5 and Tailwind 4.
@@ -24,14 +25,35 @@ Codex
 - `GET chatgpt.com/backend-api/wham/usage` with the token from `~/.codex/auth.json`.
 - Falls back to the last `rate_limits` entry in the newest `~/.codex/sessions` log.
 
-Tokens are only read, never refreshed or written. Both endpoints are undocumented and may change.
+Antigravity
+- `GetUserStatus` on the running Antigravity language server (port and CSRF token are read
+  from its process).
+- Otherwise `cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` with the OAuth token
+  from Antigravity's `state.vscdb`. If it has expired it is refreshed in memory, with the OAuth
+  client read from the installed Antigravity CLI (`agy`) or IDE.
+
+Cursor
+- `GET cursor.com/api/usage-summary` with the session token from Cursor's `state.vscdb`.
+
+GitHub Copilot
+- `GET api.github.com/copilot_internal/user` with the GitHub CLI token (`gh auth token`).
+
+z.ai GLM Coding Plan
+- `GET api.z.ai/api/monitor/usage/quota/limit` with the API key entered in settings.
+
+Kimi Code
+- `GET api.kimi.com/coding/v1/usages` with the token from `~/.kimi-code/credentials`.
+
+Providers other than Claude and Codex are off until enabled in settings. Credential files are only
+read, never written. All endpoints are undocumented and may change.
 The last successful result per provider is cached, so the overlay shows the last known values
 when a request fails.
 
 ## Install
 
-Run `Usage Monitor_<version>_x64-setup.exe`. It installs for the current user and needs no admin
-rights. Settings are stored in `%APPDATA%\dev.patrickiel.usage-monitor`.
+Download the installer from [Releases](https://github.com/patrickiel/usage-monitor/releases/latest)
+and run it. It installs for the current user and needs no admin rights. Settings are stored in
+`%APPDATA%\dev.patrickiel.usage-monitor`.
 
 ## Development
 
@@ -57,7 +79,7 @@ export const example: Provider = {
   id: 'example',
   name: 'Example',
   icon: SomePhosphorIcon,
-  async fetch() {
+  async fetch({ key }) {
     return {
       bars: [{ label: '5h', percent: 42, resetsAt: new Date(), windowSeconds: 5 * 3600 }],
       fetchedAt: new Date(),
@@ -66,5 +88,6 @@ export const example: Provider = {
 };
 ```
 
+Set `keyLabel` if the provider needs an API key; settings then shows an input for it.
 Files outside the home folders already in scope, or new hosts, need to be allowed in
 `src-tauri/capabilities/default.json`.

@@ -20,6 +20,13 @@ const samples: Record<string, () => Omit<UsageSnapshot, 'fetchedAt'>> = {
     bars: [bar('5h', 84, 1 * H + 2 * 60, 5 * H), bar('7d', 47, 4 * D + 9 * H, 7 * D)],
     resetsAvailable: 2,
   }),
+  antigravity: () => ({
+    bars: [bar('Pro', 40, 3 * H, 5 * H), bar('Flash', 12, 3 * H, 5 * H), bar('Claude', 75, 1 * H, 5 * H)],
+  }),
+  cursor: () => ({ bars: [bar('Month', 54, 12 * D, 30 * D)] }),
+  copilot: () => ({ bars: [bar('Month', 31, 18 * D, 30 * D)] }),
+  zai: () => ({ bars: [bar('5h', 22, 4 * H, 5 * H), bar('7d', 35, 5 * D, 7 * D)] }),
+  kimi: () => ({ bars: [bar('5h', 15, 2 * H, 5 * H), bar('7d', 28, 6 * D, 7 * D)] }),
 };
 
 export const withDemoData = (providers: Provider[]): Provider[] =>

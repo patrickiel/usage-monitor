@@ -8,7 +8,7 @@
   import SunIcon from 'phosphor-svelte/lib/SunIcon';
   import { availableMonitors, getCurrentWindow, primaryMonitor, type Monitor } from '@tauri-apps/api/window';
   import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
-  import { ordered } from '../providers';
+  import { ordered, providerEnabled } from '../providers';
   import { defaults, loadConfig, saveConfig, type Anchor, type Config } from '../lib/config';
   import { setTheme, type Theme } from '../lib/theme';
 
@@ -24,12 +24,13 @@
     { value: 'dark', label: 'Dark', icon: MoonIcon },
   ] as const satisfies { value: Theme; label: string; icon: unknown }[];
 
-  type NumberKey = 'scale' | 'barWidth' | 'barHeight' | 'opacity' | 'refreshSeconds';
+  type NumberKey = 'scale' | 'barWidth' | 'barHeight' | 'maxRows' | 'opacity' | 'refreshSeconds';
 
   const sliders: { key: NumberKey; label: string; min: number; max: number; step: number; format: (v: number) => string }[] = [
     { key: 'scale', label: 'Scale', min: 0.75, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
     { key: 'barWidth', label: 'Bar width', min: 24, max: 120, step: 2, format: (v) => `${v}px` },
     { key: 'barHeight', label: 'Bar thickness', min: 2, max: 10, step: 1, format: (v) => `${v}px` },
+    { key: 'maxRows', label: 'Max rows', min: 1, max: 6, step: 1, format: (v) => `${v}` },
     { key: 'opacity', label: 'Background', min: 0, max: 1, step: 0.05, format: (v) => `${Math.round(v * 100)}%` },
     { key: 'refreshSeconds', label: 'Refresh every', min: 30, max: 600, step: 15, format: (v) => `${v}s` },
   ];
@@ -176,7 +177,7 @@
                 animate:flip={{ duration: 180 }}
                 style:transform={lifted ? `translateY(${drag!.offset}px) scale(1.02)` : undefined}
                 class={[
-                  'relative flex items-center gap-2 rounded-md border px-2 py-1.5',
+                  'relative flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5',
                   'border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-800',
                   lifted
                     ? 'z-10 shadow-lg ring-1 ring-emerald-500/40'
@@ -201,11 +202,21 @@
                   </span>
                   <input
                     type="checkbox"
-                    checked={config.providers[p.id] !== false}
+                    checked={providerEnabled(config, p)}
                     onchange={(e) => (config!.providers[p.id] = e.currentTarget.checked)}
                     class="size-4 accent-emerald-500"
                   />
                 </label>
+                {#if p.keyLabel && providerEnabled(config, p)}
+                  <input
+                    type="password"
+                    placeholder={p.keyLabel}
+                    aria-label={p.keyLabel}
+                    value={config.keys[p.id] ?? ''}
+                    onchange={(e) => (config!.keys[p.id] = e.currentTarget.value.trim())}
+                    class={[field, 'ml-6 py-1 font-mono text-xs']}
+                  />
+                {/if}
               </li>
             {/each}
           </ul>

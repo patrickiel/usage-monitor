@@ -4,13 +4,13 @@
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
   import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
-  import { ordered } from '../providers';
+  import { ordered, providerEnabled } from '../providers';
   import type { Provider, UsageSnapshot } from '../providers/types';
   import { loadConfig, onConfigChanged, type Config } from '../lib/config';
   import { place } from '../lib/placement';
   import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
-  import { ago, barColors, countdown, current, pace, paceColor, severity } from '../lib/format';
+  import { ago, barColors, columns, countdown, current, pace, paceColor, problem, severity } from '../lib/format';
 
   /** Data older than this gets an age badge even without an error. */
   const STALE_MS = 10 * 60 * 1000;
@@ -20,12 +20,12 @@
   let now = $state(Date.now());
   let size = $state({ width: 0, height: 0 });
 
-  const active = $derived(config ? ordered(config.order).filter((p) => config!.providers[p.id] !== false) : []);
+  const active = $derived(config ? ordered(config.order).filter((p) => providerEnabled(config!, p)) : []);
 
   async function refreshOne(p: Provider) {
     let next: UsageSnapshot;
     try {
-      next = await p.fetch();
+      next = await p.fetch({ key: config?.keys[p.id] || undefined });
     } catch (e) {
       next = { bars: [], error: String(e), fetchedAt: new Date() };
     }
@@ -59,7 +59,7 @@
 
   // Primitive keys so unrelated config edits (e.g. dragging the scale slider) don't refetch.
   const intervalMs = $derived(config ? Math.max(30, config.refreshSeconds) * 1000 : 0);
-  const activeKey = $derived(active.map((p) => p.id).join());
+  const activeKey = $derived(active.map((p) => `${p.id}:${config?.keys[p.id] ?? ''}`).join());
 
   $effect(() => {
     if (!intervalMs) return;
@@ -114,11 +114,16 @@
             <p.icon size="1.7em" weight="bold" color={p.accent ?? 'currentColor'} />
             {#if !s}
               <CircleNotchIcon size="1.1em" class="animate-spin text-neutral-400 dark:text-white/40" />
-            {:else if s.error || now - s.fetchedAt.getTime() > STALE_MS}
-              <!-- amber: showing last known data; red: nothing to show -->
-              <span class={['flex items-center gap-0.5', s.bars.length ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400']}>
-                <WarningCircleIcon size="1.1em" weight="bold" />{ago(s.fetchedAt, now)}
+            {:else if s.error && !s.bars.length}
+              <!-- Nothing to show: the error itself takes the place of the bars. -->
+              <WarningCircleIcon size="1.1em" weight="bold" class="text-red-600 dark:text-red-400" />
+            {:else if s.error}
+              <!-- Last update failed; the bars are older data. -->
+              <span class="flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                <WarningCircleIcon size="1.1em" weight="bold" />{problem(s.error)}
               </span>
+            {:else if now - s.fetchedAt.getTime() > STALE_MS}
+              <span class="text-neutral-500 dark:text-white/45">{ago(s.fetchedAt, now)} ago</span>
             {/if}
             {#if s?.resetsAvailable != null}
               <span class="flex items-center gap-0.5 text-sky-600 dark:text-sky-300">
@@ -128,42 +133,47 @@
           </div>
 
           {#if s?.bars.length}
-            <!-- One row per limit: label · bar (optional pace tick) · percent · reset -->
-            <div
-              class="grid items-center gap-x-1.5 gap-y-[3px]"
-              style:grid-template-columns="auto {config.barWidth}px{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
-            >
-              {#each s.bars.map((b) => current(b, now)) as bar (bar.label)}
-                {@const sev = severity(bar.percent)}
-                {@const color = barColors[sev]}
-                {@const tick = config.showPace ? pace(bar, now) : null}
-                <span class="text-neutral-500 dark:text-white/45">{bar.label}</span>
-                <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
-                  <div
-                    class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
-                    style:width="{Math.min(100, bar.percent)}%"
-                    style:background-color={color}
-                    style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
-                  ></div>
-                  {#if tick != null}
-                    <div
-                      class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2"
-                      style:left="{tick}%"
-                      style:background-color={paceColor(bar.percent, tick)}
-                      style:box-shadow="0 0 0 1px var(--pace-outline)"
-                    ></div>
-                  {/if}
+            <!-- One row per limit: label · bar (optional pace tick) · percent · reset.
+                 Past `maxRows`, limits continue in another column. -->
+            <div class="flex items-center gap-3">
+              {#each columns(s.bars.map((b) => current(b, now)), config.maxRows) as column, c (c)}
+                <div
+                  class="grid items-center gap-x-1.5 gap-y-[3px]"
+                  style:grid-template-columns="auto {config.barWidth}px{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
+                >
+                  {#each column as bar (bar.label)}
+                    {@const sev = severity(bar.percent)}
+                    {@const color = barColors[sev]}
+                    {@const tick = config.showPace ? pace(bar, now) : null}
+                    <span class="text-neutral-500 dark:text-white/45">{bar.label}</span>
+                    <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
+                      <div
+                        class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
+                        style:width="{Math.min(100, bar.percent)}%"
+                        style:background-color={color}
+                        style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
+                      ></div>
+                      {#if tick != null}
+                        <div
+                          class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2"
+                          style:left="{tick}%"
+                          style:background-color={paceColor(bar.percent, tick)}
+                          style:box-shadow="0 0 0 1px var(--pace-outline)"
+                        ></div>
+                      {/if}
+                    </div>
+                    {#if config.showPercent}
+                      <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
+                        {Math.round(bar.percent)}%
+                      </span>
+                    {/if}
+                    {#if config.showTimes}
+                      <span class="text-right text-neutral-500 dark:text-white/40">
+                        {bar.detail ?? (bar.resetsAt ? countdown(bar.resetsAt, now) : '')}
+                      </span>
+                    {/if}
+                  {/each}
                 </div>
-                {#if config.showPercent}
-                  <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
-                    {Math.round(bar.percent)}%
-                  </span>
-                {/if}
-                {#if config.showTimes}
-                  <span class="text-right text-neutral-500 dark:text-white/40">
-                    {bar.detail ?? (bar.resetsAt ? countdown(bar.resetsAt, now) : '')}
-                  </span>
-                {/if}
               {/each}
             </div>
           {:else if s}

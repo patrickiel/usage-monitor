@@ -33,5 +33,9 @@ export interface Provider {
   icon: Component<IconComponentProps>;
   /** Icon color; defaults to the text color, which follows the theme. */
   accent?: string;
-  fetch(): Promise<UsageSnapshot>;
+  /** Shown until toggled in settings; off for providers most people don't use. Default true. */
+  defaultEnabled?: boolean;
+  /** Set when the provider needs an API key; settings shows an input with this label. */
+  keyLabel?: string;
+  fetch(ctx: { key?: string }): Promise<UsageSnapshot>;
 }

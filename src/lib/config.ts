@@ -18,6 +18,8 @@ export interface Config {
   barWidth: number;
   /** Bar thickness in logical px. */
   barHeight: number;
+  /** Rows per column; a provider with more bars continues in another column. */
+  maxRows: number;
   scale: number;
   /** Background opacity, 0–1. */
   opacity: number;
@@ -31,8 +33,10 @@ export interface Config {
   theme: Theme;
   /** Provider ids in display order (drag to reorder in settings). */
   order: string[];
-  /** Provider id → enabled. Missing ids count as enabled. */
+  /** Provider id → enabled. Missing ids use the provider's default. */
   providers: Record<string, boolean>;
+  /** Provider id → API key, for providers that need one. */
+  keys: Record<string, string>;
 }
 
 export const defaults: Config = {
@@ -42,6 +46,7 @@ export const defaults: Config = {
   offsetY: 0,
   barWidth: 48,
   barHeight: 7,
+  maxRows: 3,
   scale: 1,
   opacity: 0,
   refreshSeconds: 120,
@@ -51,6 +56,7 @@ export const defaults: Config = {
   theme: 'auto',
   order: [],
   providers: {},
+  keys: {},
 };
 
 const CHANGED = 'config-changed';

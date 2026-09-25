@@ -1,20 +1,36 @@
 import type { LimitBar } from '../providers/types';
 
-/** Time until `date`, compact: "3d4h", "2h14m", "5h", "9m". */
+/** Time until `date`, rounded to a single unit: "5d", "3h", "9m". */
 export function countdown(date: Date, now: number): string {
   const mins = Math.max(0, Math.round((date.getTime() - now) / 60000));
-  const d = Math.floor(mins / 1440);
-  const h = Math.floor((mins % 1440) / 60);
-  const m = mins % 60;
-  const pair = (a: string, b: number, unit: string) => (b ? `${a}${b}${unit}` : a);
-  if (d) return pair(`${d}d`, h, 'h');
-  if (h) return pair(`${h}h`, m, 'm');
-  return `${m}m`;
+  if (mins < 60) return `${mins}m`;
+  if (mins < 23.5 * 60) return `${Math.round(mins / 60)}h`;
+  return `${Math.round(mins / 1440)}d`;
 }
 
 /** A window whose reset time has passed has reset: show it empty (cached data can outlive it). */
 export function current(bar: LimitBar, now: number): LimitBar {
   return bar.resetsAt && bar.resetsAt.getTime() <= now ? { label: bar.label, percent: 0 } : bar;
+}
+
+/** Bars split into as few columns as fit `rows` each, balanced (4 in 3 rows: 2/2, not 3/1). */
+export function columns(bars: LimitBar[], rows: number): LimitBar[][] {
+  const count = Math.ceil(bars.length / Math.max(1, rows));
+  const out: LimitBar[][] = [];
+  for (let c = 0, start = 0; c < count; c++) {
+    // Earlier columns take the remainder, so heights differ by at most one.
+    const size = Math.floor(bars.length / count) + (c < bars.length % count ? 1 : 0);
+    out.push(bars.slice(start, (start += size)));
+  }
+  return out;
+}
+
+/** One word for why an update failed, short enough to sit under a provider icon. */
+export function problem(error: string): string {
+  if (/sign|token|api key|login/i.test(error)) return 'sign in';
+  if (/rate limit|429/i.test(error)) return 'limited';
+  if (/offline|network|fetch/i.test(error)) return 'offline';
+  return 'error';
 }
 
 /** Time since `date`, e.g. "12s", "3m". */

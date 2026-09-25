@@ -1,4 +1,5 @@
-import ClaudeIcon from '../icons/ClaudeIcon.svelte';
+import { siClaude } from 'simple-icons';
+import { brandIcon } from '../icons/brand';
 import { fetch } from '@tauri-apps/plugin-http';
 import { readDir, readTextFile, stat, BaseDirectory } from '@tauri-apps/plugin-fs';
 import type { LimitBar, Provider, UsageSnapshot } from './types';
@@ -138,7 +139,7 @@ async function fetchApi(): Promise<UsageSnapshot> {
 export const claude: Provider = {
   id: 'claude',
   name: 'Claude',
-  icon: ClaudeIcon,
+  icon: brandIcon(siClaude.path),
   accent: '#d97757',
   async fetch() {
     const shared = await readSharedCache().catch(() => null);
