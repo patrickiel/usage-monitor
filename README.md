@@ -55,6 +55,9 @@ Download the installer from [Releases](https://github.com/patrickiel/usage-monit
 and run it. It installs for the current user and needs no admin rights. Settings are stored in
 `%APPDATA%\dev.patrickiel.usage-monitor`.
 
+It checks GitHub for a new release at startup and every 6 hours. When one is found, an
+"Install update" entry appears in the tray menu and an update button in the settings footer.
+
 ## Development
 
 Requires Node, pnpm and a Rust toolchain.
@@ -63,8 +66,13 @@ Requires Node, pnpm and a Rust toolchain.
 pnpm install
 pnpm tauri dev
 pnpm check      # svelte-check
-pnpm release    # installer in src-tauri/target/release/bundle/nsis
+pnpm release    # signed installer + latest.json in src-tauri/target/release/bundle/nsis
 ```
+
+`pnpm release` signs the installer with `~/.tauri/usage-monitor.key` (or `USAGE_MONITOR_SIGNING_KEY`).
+Bump the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, then
+attach both `UsageMonitor_<version>_x64-setup.exe` and `latest.json` to the `v<version>` release;
+installed copies read `releases/latest/download/latest.json`.
 
 `VITE_DEMO=1 pnpm tauri dev` replaces provider data with fixed sample values
 (`src/providers/demo.ts`), which is how the screenshots above were taken.

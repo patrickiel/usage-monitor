@@ -6,6 +6,9 @@
   import CircleHalfIcon from 'phosphor-svelte/lib/CircleHalfIcon';
   import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
   import SunIcon from 'phosphor-svelte/lib/SunIcon';
+  import { getVersion } from '@tauri-apps/api/app';
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { availableMonitors, getCurrentWindow, primaryMonitor, type Monitor } from '@tauri-apps/api/window';
   import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { ordered, providerEnabled } from '../providers';
@@ -47,13 +50,43 @@
   let monitors = $state<Monitor[]>([]);
   let primary = $state('');
   let autostart = $state(false);
+  let version = $state('');
+  // text: the new version, or the error message.
+  let update = $state<{ state: 'idle' | 'checking' | 'latest' | 'available' | 'installing' | 'error'; text?: string }>({
+    state: 'idle',
+  });
 
   onMount(() => {
     loadConfig().then((c) => (config = c));
     availableMonitors().then((m) => (monitors = m));
     primaryMonitor().then((m) => (primary = m?.name ?? ''));
     isEnabled().then((v) => (autostart = v));
+    getVersion().then((v) => (version = v));
+    // The background check announces updates too.
+    const unlisten = listen<string>('update-available', (e) => {
+      if (update.state !== 'installing') update = { state: 'available', text: e.payload };
+    });
+    return () => unlisten.then((f) => f());
   });
+
+  async function checkUpdate() {
+    update = { state: 'checking' };
+    try {
+      const v = await invoke<string | null>('check_update');
+      update = v ? { state: 'available', text: v } : { state: 'latest' };
+    } catch (e) {
+      update = { state: 'error', text: String(e) };
+    }
+  }
+
+  async function installUpdate() {
+    update = { state: 'installing', text: update.text };
+    try {
+      await invoke('install_update'); // the installer closes and restarts the app
+    } catch (e) {
+      update = { state: 'error', text: String(e) };
+    }
+  }
 
   // Live apply: every edit is saved and broadcast to the overlay.
   $effect(() => {
@@ -293,10 +326,37 @@
         <input type="checkbox" bind:checked={autostart} onchange={toggleAutostart} class="size-4 accent-emerald-500" />
         <span>Start with Windows</span>
       </label>
-      <button
-        onclick={() => (config = structuredClone(defaults))}
-        class="text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300">Reset all</button
-      >
+      <div class="flex items-center gap-4 text-xs text-neutral-500">
+        {#if update.state === 'available' || update.state === 'installing'}
+          <button
+            onclick={installUpdate}
+            disabled={update.state === 'installing'}
+            class="rounded border border-emerald-500 bg-emerald-500/20 px-2 py-0.5 text-emerald-700 hover:bg-emerald-500/30 disabled:opacity-60 dark:border-emerald-400 dark:text-emerald-300"
+          >
+            {update.state === 'installing' ? 'Updating…' : `Update to v${update.text}`}
+          </button>
+        {:else}
+          <button
+            onclick={checkUpdate}
+            disabled={update.state === 'checking'}
+            title={update.state === 'error' ? update.text : undefined}
+            class="hover:text-neutral-800 dark:hover:text-neutral-300"
+          >
+            v{version} ·
+            {update.state === 'checking'
+              ? 'Checking…'
+              : update.state === 'latest'
+                ? 'Up to date'
+                : update.state === 'error'
+                  ? 'Update check failed'
+                  : 'Check for updates'}
+          </button>
+        {/if}
+        <button
+          onclick={() => (config = structuredClone(defaults))}
+          class="hover:text-neutral-800 dark:hover:text-neutral-300">Reset all</button
+        >
+      </div>
     </footer>
   {/if}
 </main>

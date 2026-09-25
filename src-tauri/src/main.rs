@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod probes;
+mod update;
 
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
@@ -115,7 +116,9 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![probes::read_vscdb, probes::gh_token, probes::antigravity_client, probes::antigravity_status])
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(update::Pending::default())
+        .invoke_handler(tauri::generate_handler![probes::read_vscdb, probes::gh_token, probes::antigravity_client, probes::antigravity_status, update::check_update, update::install_update])
         .setup(|app| {
             let menu = Menu::with_items(
                 app,
@@ -137,6 +140,14 @@ fn main() {
                     "refresh" => {
                         let _ = app.emit("refresh", ());
                     }
+                    "update" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = update::install_update(app).await {
+                                eprintln!("update failed: {e}");
+                            }
+                        });
+                    }
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -157,6 +168,8 @@ fn main() {
             #[cfg(windows)]
             topmost::install(overlay.hwnd()?.0 as isize);
             watch(tray, light);
+            app.manage(update::TrayMenu(menu));
+            update::watch(app.handle().clone());
 
             Ok(())
         })

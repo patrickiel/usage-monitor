@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Usage Monitor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "dev.patrickiel.usage-monitor",
   "build": {
     "devUrl": "http://localhost:1420",
@@ -54,9 +54,15 @@
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico"
       }
-    }
+    },
+    "createUpdaterArtifacts": true
   },
   "plugins": {
-    "fs": { "requireLiteralLeadingDot": false }
+    "fs": { "requireLiteralLeadingDot": false },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEzRDQ5RjlFMThGN0Q4NzgKUldSNDJQY1lucC9VbzNCWmZQOWRUYTRLeTZ3cGxHbk5UUDBEQkViSzRtMGFuMWUzdlA3KzFwaTQK",
+      "endpoints": ["https://github.com/patrickiel/usage-monitor/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }
