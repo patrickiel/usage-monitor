@@ -1,12 +1,15 @@
 import OpenAiLogoIcon from 'phosphor-svelte/lib/OpenAiLogoIcon';
 import { fetch } from '@tauri-apps/plugin-http';
-import { readDir, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { readDir, readTextFile, writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 import type { LimitBar, Provider, UsageSnapshot } from './types';
 import { readHomeJson, toDate, windowLabel } from './util';
 
 interface Auth {
-  tokens?: { access_token?: string; account_id?: string };
+  tokens?: { id_token?: string; access_token?: string; refresh_token?: string; account_id?: string };
+  last_refresh?: string;
 }
+
+const AUTH_FILE = '.codex/auth.json';
 
 interface ApiWindow {
   used_percent?: number;
@@ -56,14 +59,60 @@ const sessionBar = (w: SessionWindow | undefined, fallback: string, at: Date) =>
     fallback,
   );
 
+const usage = (auth: Auth) => {
+  const headers: Record<string, string> = { Authorization: `Bearer ${auth.tokens?.access_token}` };
+  if (auth.tokens?.account_id) headers['ChatGPT-Account-Id'] = auth.tokens.account_id;
+  return fetch('https://chatgpt.com/backend-api/wham/usage', { headers });
+};
+
+/**
+ * Codex only refreshes its access token while it runs, so it can expire while Codex is idle
+ * (e.g. overnight). Refresh it the way Codex does and write the result back to auth.json:
+ * the refresh token rotates, and Codex must get the new one or its login breaks.
+ */
+async function refresh(auth: Auth): Promise<Auth | null> {
+  if (!auth.tokens?.refresh_token) return null;
+  const res = await fetch('https://auth.openai.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: '' },
+    body: JSON.stringify({
+      client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+      grant_type: 'refresh_token',
+      refresh_token: auth.tokens.refresh_token,
+      scope: 'openid profile email',
+    }),
+  });
+  if (!res.ok) return null;
+  const t = (await res.json()) as { id_token?: string; access_token?: string; refresh_token?: string };
+  if (!t.access_token) return null;
+  const next: Auth = {
+    ...auth,
+    tokens: {
+      ...auth.tokens,
+      access_token: t.access_token,
+      id_token: t.id_token ?? auth.tokens.id_token,
+      refresh_token: t.refresh_token ?? auth.tokens.refresh_token,
+    },
+    last_refresh: new Date().toISOString(),
+  };
+  await writeTextFile(AUTH_FILE, JSON.stringify(next, null, 2), { baseDir: BaseDirectory.Home });
+  return next;
+}
+
 /** A snapshot, or a short reason why the endpoint gave none. */
 async function fromApi(auth: Auth): Promise<UsageSnapshot | string> {
-  const token = auth.tokens?.access_token;
-  if (!token) return 'not signed in';
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-  if (auth.tokens?.account_id) headers['ChatGPT-Account-Id'] = auth.tokens.account_id;
+  if (!auth.tokens?.access_token) return 'not signed in';
 
-  const res = await fetch('https://chatgpt.com/backend-api/wham/usage', { headers });
+  let res = await usage(auth);
+  if (res.status === 401) {
+    // Codex may have refreshed since we read the file; otherwise refresh ourselves.
+    const reread = await readHomeJson<Auth>(AUTH_FILE).catch(() => null);
+    const next =
+      reread?.tokens?.access_token && reread.tokens.access_token !== auth.tokens.access_token
+        ? reread
+        : await refresh(reread ?? auth).catch(() => null);
+    if (next) res = await usage(next);
+  }
   if (res.status === 401) return 'token expired · run codex';
   if (!res.ok) return `http ${res.status}`;
   const data = (await res.json()) as {
@@ -116,7 +165,7 @@ export const codex: Provider = {
   name: 'Codex',
   icon: OpenAiLogoIcon,
   async fetch() {
-    const auth = await readHomeJson<Auth>('.codex/auth.json').catch(() => null);
+    const auth = await readHomeJson<Auth>(AUTH_FILE).catch(() => null);
     const api = auth ? await fromApi(auth).catch(() => 'offline') : 'not signed in';
     if (typeof api !== 'string') return api;
     // Endpoint failed: the session log is older but better than nothing; keep the reason visible.
