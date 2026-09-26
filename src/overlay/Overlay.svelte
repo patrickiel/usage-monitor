@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { listen } from '@tauri-apps/api/event';
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
@@ -22,7 +23,27 @@
 
   const active = $derived(config ? ordered(config.order).filter((p) => providerEnabled(config!, p)) : []);
 
-  async function refreshOne(p: Provider) {
+  /** Providers with a fetch in flight; a second refresh joins it instead of fetching again. */
+  const inflight: Record<string, Promise<void>> = {};
+  let loading = $state<Record<string, boolean>>({});
+  /** Keeps the loading ring up long enough to register, even for instant (cached/local) fetches. */
+  const MIN_LOADING_MS = 500;
+
+  function refreshOne(p: Provider) {
+    return (inflight[p.id] ??= (async () => {
+      loading[p.id] = true;
+      const started = Date.now();
+      try {
+        await fetchOne(p);
+      } finally {
+        await new Promise((r) => setTimeout(r, MIN_LOADING_MS - (Date.now() - started)));
+        loading[p.id] = false;
+        delete inflight[p.id];
+      }
+    })());
+  }
+
+  async function fetchOne(p: Provider) {
     let next: UsageSnapshot;
     try {
       next = await p.fetch({ key: config?.keys[p.id] || undefined });
@@ -111,7 +132,31 @@
         <div class="flex items-center gap-2">
           <!-- Provider: icon, then only what needs attention (stale/error, resets left). -->
           <div class="flex flex-col items-center gap-1">
-            <p.icon size="1.7em" weight="bold" color={p.accent ?? 'currentColor'} />
+            <!-- Refreshing: the icon dims under a thin ring, positioned outside the flow so nothing shifts. -->
+            <span class="relative grid place-items-center">
+              <span class={['grid transition-opacity duration-300', s && loading[p.id] && 'opacity-35']}>
+                <p.icon size="1.7em" weight="bold" color={p.accent ?? 'currentColor'} />
+              </span>
+              {#if s && loading[p.id]}
+                <svg
+                  class="pointer-events-none absolute top-1/2 left-1/2 size-[2.3em] -translate-1/2"
+                  viewBox="0 0 24 24"
+                  transition:fade={{ duration: 150 }}
+                >
+                  <circle cx="12" cy="12" r="11" fill="none" stroke-width="1.25" class="stroke-black/10 dark:stroke-white/10" />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="11"
+                    fill="none"
+                    stroke-width="1.25"
+                    stroke-linecap="round"
+                    stroke-dasharray="17 52"
+                    class="origin-center animate-spin stroke-neutral-500 dark:stroke-white/60"
+                  />
+                </svg>
+              {/if}
+            </span>
             {#if !s}
               <CircleNotchIcon size="1.1em" class="animate-spin text-neutral-400 dark:text-white/40" />
             {:else if s.error && !s.bars.length}

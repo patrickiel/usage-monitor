@@ -53,18 +53,25 @@ fn tray_icon(light: bool) -> Image<'static> {
 
 /// The taskbar is itself topmost and jumps above the overlay whenever it's clicked (the overlay
 /// is click-through, so clicking it clicks the taskbar). Push the overlay back on top, without
-/// activating it, the moment the foreground changes.
+/// activating it, on every foreground change and every mouse click (clicking the taskbar while
+/// it's already the foreground doesn't change the foreground).
 #[cfg(windows)]
 mod topmost {
     use std::sync::atomic::{AtomicIsize, Ordering};
-    use windows_sys::Win32::Foundation::HWND;
+    use std::sync::mpsc::{channel, Sender};
+    use std::sync::OnceLock;
+    use std::time::{Duration, Instant};
+    use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
     use windows_sys::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SetWindowPos, EVENT_SYSTEM_FOREGROUND, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        WINEVENT_OUTOFCONTEXT,
+        CallNextHookEx, GetWindowRect, IsWindowVisible, SetWindowPos, MSLLHOOKSTRUCT, SetWindowsHookExW, EVENT_SYSTEM_FOREGROUND, HWND_TOPMOST, SWP_NOACTIVATE,
+        SWP_NOMOVE, SWP_NOSIZE, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN,
+        WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP,
     };
 
     static OVERLAY: AtomicIsize = AtomicIsize::new(0);
+    static BURST: OnceLock<Sender<()>> = OnceLock::new();
+    static ON_CLICK: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
     pub fn raise() {
         let hwnd = OVERLAY.load(Ordering::Relaxed);
@@ -73,14 +80,76 @@ mod topmost {
         }
     }
 
-    unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
-        raise();
+    fn burst() {
+        if let Some(tx) = BURST.get() {
+            let _ = tx.send(());
+        }
     }
 
-    /// Call on the main thread: out-of-context hooks are delivered through its message loop.
-    pub fn install(hwnd: isize) {
+    unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
+        burst();
+    }
+
+    /// Whether a screen point (physical pixels, like the hook's) is on the visible overlay.
+    fn on_overlay(pt: POINT) -> bool {
+        let hwnd = OVERLAY.load(Ordering::Relaxed) as HWND;
+        let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        !hwnd.is_null()
+            && unsafe { IsWindowVisible(hwnd) != 0 && GetWindowRect(hwnd, &mut r) != 0 }
+            && (r.left..r.right).contains(&pt.x)
+            && (r.top..r.bottom).contains(&pt.y)
+    }
+
+    /// Must return fast (it sits in every mouse event's path), so it only signals the raiser.
+    /// The click itself still falls through the overlay to what's below.
+    unsafe extern "system" fn on_mouse(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        if code >= 0 {
+            let msg = wparam as u32;
+            if matches!(
+                msg,
+                WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN | WM_MBUTTONUP
+            ) {
+                burst();
+            }
+            if msg == WM_LBUTTONUP && on_overlay((*(lparam as *const MSLLHOOKSTRUCT)).pt) {
+                if let Some(f) = ON_CLICK.get() {
+                    f();
+                }
+            }
+        }
+        CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam)
+    }
+
+    /// The taskbar raises itself at some point while handling the event, and a single delayed raise
+    /// leaves a visible flash until it runs. So keep re-raising every couple of milliseconds for a
+    /// short window after each event: the overlay is back on top before the next frame is composed.
+    fn spawn_raiser() -> Sender<()> {
+        const WINDOW: Duration = Duration::from_millis(300);
+        const EVERY: Duration = Duration::from_millis(2);
+        let (tx, rx) = channel::<()>();
+        std::thread::spawn(move || {
+            while rx.recv().is_ok() {
+                let mut until = Instant::now() + WINDOW;
+                while Instant::now() < until {
+                    raise();
+                    std::thread::sleep(EVERY);
+                    if rx.try_iter().count() > 0 {
+                        until = Instant::now() + WINDOW;
+                    }
+                }
+            }
+        });
+        tx
+    }
+
+    /// Call on the main thread: out-of-context and low-level hooks are delivered through its message loop.
+    /// `on_click` runs (on that thread) when the overlay is left-clicked.
+    pub fn install(hwnd: isize, on_click: impl Fn() + Send + Sync + 'static) {
         OVERLAY.store(hwnd, Ordering::Relaxed);
+        let _ = BURST.set(spawn_raiser());
+        let _ = ON_CLICK.set(Box::new(on_click));
         unsafe {
+            SetWindowsHookExW(WH_MOUSE_LL, Some(on_mouse), std::ptr::null_mut(), 0);
             SetWinEventHook(
                 EVENT_SYSTEM_FOREGROUND,
                 EVENT_SYSTEM_FOREGROUND,
@@ -166,7 +235,12 @@ fn main() {
             let overlay = app.get_webview_window("overlay").unwrap();
             overlay.set_ignore_cursor_events(true)?;
             #[cfg(windows)]
-            topmost::install(overlay.hwnd()?.0 as isize);
+            {
+                let app = app.handle().clone();
+                topmost::install(overlay.hwnd()?.0 as isize, move || {
+                    let _ = app.emit("refresh", ());
+                });
+            }
             watch(tray, light);
             app.manage(update::TrayMenu(menu));
             update::watch(app.handle().clone());
