@@ -4894,7 +4894,7 @@ dependencies = [
 
 [[package]]
 name = "usage-monitor"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "regex",
  "reqwest 0.12.28",
