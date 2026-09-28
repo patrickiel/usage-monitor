@@ -17,6 +17,7 @@ export async function findMonitor(name: string): Promise<Monitor | null> {
  * Docks the current window on the configured monitor. Uses the full monitor
  * bounds (not the work area) so it can sit on top of the taskbar.
  * `width`/`height` are the content size in logical px.
+ * Leaves a window that's already docked alone, so it's cheap to call often.
  */
 export async function place(config: Config, width: number, height: number): Promise<void> {
   const monitor = await findMonitor(config.monitor);
@@ -36,8 +37,10 @@ export async function place(config: Config, width: number, height: number): Prom
   const py = v === 'top' ? y + oy : v === 'bottom' ? y + mh - h - oy : y + Math.round((mh - h) / 2) + oy;
 
   const win = getCurrentWindow();
-  // Move first so a DPI change happens before sizing, then size.
-  await win.setPosition(new PhysicalPosition(px, py));
-  await win.setSize(new PhysicalSize(w, h));
+  // Move first so a DPI change happens before sizing, then size (read after the move, which may rescale it).
+  const pos = await win.outerPosition();
+  if (pos.x !== px || pos.y !== py) await win.setPosition(new PhysicalPosition(px, py));
+  const size = await win.innerSize();
+  if (size.width !== w || size.height !== h) await win.setSize(new PhysicalSize(w, h));
   if (!(await win.isVisible())) await win.show();
 }

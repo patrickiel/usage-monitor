@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { listen } from '@tauri-apps/api/event';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
   import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
@@ -104,14 +105,21 @@
     if (config) setTheme(config.theme);
   });
 
-  // Re-dock on any config/size change, and once a minute to follow monitor changes.
+  // Re-dock on any config/size change, and keep it docked: when displays change (e.g. a monitor
+  // switch) Windows shoves the overlay off the taskbar, so re-dock on every move, plus every 2 s for
+  // layout changes that don't move it. Re-docking a docked overlay doesn't touch the window.
   $effect(() => {
     if (!config || !size.width) return;
     const snapshot = $state.snapshot(config);
     const { width, height } = size;
-    place(snapshot, width, height);
-    const id = setInterval(() => place(snapshot, width, height), 60000);
-    return () => clearInterval(id);
+    const dock = () => place(snapshot, width, height);
+    dock();
+    const moved = getCurrentWindow().onMoved(dock);
+    const id = setInterval(dock, 2000);
+    return () => {
+      clearInterval(id);
+      moved.then((f) => f());
+    };
   });
 </script>
 
