@@ -54,7 +54,8 @@ fn tray_icon(light: bool) -> Image<'static> {
 /// The taskbar is itself topmost and jumps above the overlay whenever it's clicked (the overlay
 /// is click-through, so clicking it clicks the taskbar). Push the overlay back on top, without
 /// activating it, on every foreground change and every mouse click (clicking the taskbar while
-/// it's already the foreground doesn't change the foreground).
+/// it's already the foreground doesn't change the foreground). A fullscreen window (video, game)
+/// on the overlay's monitor is the exception: the overlay stays below it.
 #[cfg(windows)]
 mod topmost {
     use std::sync::atomic::{AtomicIsize, Ordering};
@@ -62,9 +63,10 @@ mod topmost {
     use std::sync::OnceLock;
     use std::time::{Duration, Instant};
     use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+    use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONULL};
     use windows_sys::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, GetWindowRect, IsWindowVisible, SetWindowPos, MSLLHOOKSTRUCT, SetWindowsHookExW, EVENT_SYSTEM_FOREGROUND, HWND_TOPMOST, SWP_NOACTIVATE,
+        CallNextHookEx, GetClassNameW, GetForegroundWindow, GetShellWindow, GetWindowRect, IsWindowVisible, SetWindowPos, MSLLHOOKSTRUCT, SetWindowsHookExW, EVENT_SYSTEM_FOREGROUND, HWND_TOPMOST, SWP_NOACTIVATE,
         SWP_NOMOVE, SWP_NOSIZE, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN,
         WM_MBUTTONUP, WM_RBUTTONDOWN, WM_RBUTTONUP,
     };
@@ -73,11 +75,44 @@ mod topmost {
     static BURST: OnceLock<Sender<()>> = OnceLock::new();
     static ON_CLICK: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
-    pub fn raise() {
-        let hwnd = OVERLAY.load(Ordering::Relaxed);
-        if hwnd != 0 {
-            unsafe { SetWindowPos(hwnd as _, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+    /// The foreground window, if it covers the whole of the overlay's monitor (a fullscreen video,
+    /// game or presentation). The desktop is excluded: it covers the monitor too.
+    fn fullscreen_over(overlay: HWND) -> Option<HWND> {
+        unsafe {
+            let fg = GetForegroundWindow();
+            if fg.is_null() || fg == overlay || fg == GetShellWindow() {
+                return None;
+            }
+            let mut class = [0u16; 16];
+            let len = GetClassNameW(fg, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
+            let class = String::from_utf16_lossy(&class[..len]);
+            if class == "Progman" || class == "WorkerW" {
+                return None;
+            }
+            let monitor = MonitorFromWindow(overlay, MONITOR_DEFAULTTONULL);
+            if monitor.is_null() || monitor != MonitorFromWindow(fg, MONITOR_DEFAULTTONULL) {
+                return None;
+            }
+            let mut info: MONITORINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+            let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            if GetMonitorInfoW(monitor, &mut info) == 0 || GetWindowRect(fg, &mut r) == 0 {
+                return None;
+            }
+            let m = info.rcMonitor;
+            (r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom).then_some(fg)
         }
+    }
+
+    /// Topmost over the taskbar, except under a fullscreen window on the same monitor: then it
+    /// goes just beneath that window (which also drops its topmost status), until the foreground changes.
+    pub fn raise() {
+        let hwnd = OVERLAY.load(Ordering::Relaxed) as HWND;
+        if hwnd.is_null() {
+            return;
+        }
+        let after = fullscreen_over(hwnd).unwrap_or(HWND_TOPMOST);
+        unsafe { SetWindowPos(hwnd, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
     }
 
     fn burst() {
@@ -96,6 +131,7 @@ mod topmost {
         let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
         !hwnd.is_null()
             && unsafe { IsWindowVisible(hwnd) != 0 && GetWindowRect(hwnd, &mut r) != 0 }
+            && fullscreen_over(hwnd).is_none()
             && (r.left..r.right).contains(&pt.x)
             && (r.top..r.bottom).contains(&pt.y)
     }
