@@ -5,7 +5,6 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
   import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
-  import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
   import { ordered, providerEnabled } from '../providers';
   import type { Provider, UsageSnapshot } from '../providers/types';
   import { barsShown, loadConfig, onConfigChanged, type Config } from '../lib/config';
@@ -14,8 +13,32 @@
   import { loadCached, saveCached } from '../lib/cache';
   import { ago, barColors, columns, countdown, current, pace, paceColor, problem, severity } from '../lib/format';
 
-  /** Data older than this gets an age badge even without an error. */
+  /** Data older than this gets an age note even without an error. */
   const STALE_MS = 10 * 60 * 1000;
+  /** How long each note under a provider icon shows before the next takes its turn. */
+  const NOTE_MS = 4000;
+
+  type Note = { key: string; text: string | number; icon?: typeof ClockCounterClockwiseIcon; class: string };
+
+  /** What needs attention under a provider icon: why the last update failed (or how old the data is), and resets left. */
+  function notesFor(s: UsageSnapshot): Note[] {
+    const notes: Note[] = [];
+    if (s.error) {
+      const tone = s.bars.length ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+      notes.push({ key: 'problem', text: problem(s.error), class: tone });
+    } else if (now - s.fetchedAt.getTime() > STALE_MS) {
+      notes.push({ key: 'age', text: `${ago(s.fetchedAt, now)} ago`, class: 'text-neutral-500 dark:text-white/45' });
+    }
+    if (s.resetsAvailable != null) {
+      notes.push({
+        key: 'resets',
+        text: s.resetsAvailable,
+        icon: ClockCounterClockwiseIcon,
+        class: 'text-sky-600 dark:text-sky-300',
+      });
+    }
+    return notes;
+  }
 
   let config = $state<Config | null>(null);
   let snapshots = $state<Record<string, UsageSnapshot>>({});
@@ -145,6 +168,17 @@
               <span class={['grid transition-opacity duration-300', s && loading[p.id] && 'opacity-35']}>
                 <p.icon size="1.7em" weight="bold" color={p.accent ?? 'currentColor'} />
               </span>
+              {#if s?.error}
+                <!-- Status dot on the icon: persists while the note below takes turns. Amber: the
+                     bars are older data; red: nothing to show. -->
+                <span
+                  class={[
+                    'absolute -right-[0.2em] -bottom-[0.2em] size-[0.7em] rounded-full ring-[1.5px] ring-neutral-50 dark:ring-[#101012]',
+                    s.bars.length ? 'bg-amber-500 dark:bg-amber-400' : 'bg-red-600 dark:bg-red-400',
+                  ]}
+                  transition:fade={{ duration: 200 }}
+                ></span>
+              {/if}
               {#if s && loading[p.id]}
                 <svg
                   class="pointer-events-none absolute top-1/2 left-1/2 size-[2.3em] -translate-1/2"
@@ -167,21 +201,26 @@
             </span>
             {#if !s}
               <CircleNotchIcon size="1.1em" class="animate-spin text-neutral-400 dark:text-white/40" />
-            {:else if s.error && !s.bars.length}
-              <!-- Nothing to show: the error itself takes the place of the bars. -->
-              <WarningCircleIcon size="1.1em" weight="bold" class="text-red-600 dark:text-red-400" />
-            {:else if s.error}
-              <!-- Last update failed; the bars are older data. -->
-              <span class="flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
-                <WarningCircleIcon size="1.1em" weight="bold" />{problem(s.error)}
-              </span>
-            {:else if now - s.fetchedAt.getTime() > STALE_MS}
-              <span class="text-neutral-500 dark:text-white/45">{ago(s.fetchedAt, now)} ago</span>
-            {/if}
-            {#if s?.resetsAvailable != null}
-              <span class="flex items-center gap-0.5 text-sky-600 dark:text-sky-300">
-                <ClockCounterClockwiseIcon size="1.1em" weight="bold" />{s.resetsAvailable}
-              </span>
+            {:else}
+              {@const notes = notesFor(s)}
+              {#if notes.length}
+                <!-- One line, always: notes share a single grid cell (sized to the widest) and take
+                     turns, so a failed update never makes the overlay taller than the taskbar. -->
+                {@const shown = Math.floor(now / NOTE_MS) % notes.length}
+                <span class="grid">
+                  {#each notes as note, n (note.key)}
+                    <span
+                      class={[
+                        'col-start-1 row-start-1 flex items-center justify-center gap-0.5 transition-opacity duration-500',
+                        n !== shown && 'opacity-0',
+                        note.class,
+                      ]}
+                    >
+                      {#if note.icon}<note.icon size="1.1em" weight="bold" />{/if}{note.text}
+                    </span>
+                  {/each}
+                </span>
+              {/if}
             {/if}
           </div>
 
@@ -189,7 +228,13 @@
             {@const showBars = barsShown(config, p.id)}
             <!-- One row per limit: label · bar (optional pace tick) · percent · reset.
                  Past `maxRows`, limits continue in another column. -->
-            <div class="flex items-center gap-3">
+            <!-- Bars from before a failed update fade back, so old data never reads as live. -->
+            <div
+              class={[
+                'flex items-center gap-3 transition-[opacity,filter] duration-500',
+                s.error && 'opacity-55 saturate-[.4]',
+              ]}
+            >
               {#each columns(s.bars.map((b) => current(b, now)), config.maxRows) as column, c (c)}
                 <div
                   class="grid items-center gap-x-1.5 gap-y-[3px]"
@@ -233,7 +278,7 @@
               {/each}
             </div>
           {:else if s}
-            <span class="text-neutral-500 dark:text-white/50">{s.error ?? 'no limits'}</span>
+            <span class="max-w-[30ch] truncate text-neutral-500 dark:text-white/50">{s.error ?? 'no limits'}</span>
           {/if}
         </div>
       {/each}
