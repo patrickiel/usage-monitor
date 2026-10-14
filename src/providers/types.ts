@@ -37,5 +37,7 @@ export interface Provider {
   defaultEnabled?: boolean;
   /** Set when the provider needs an API key; settings shows an input with this label. */
   keyLabel?: string;
+  /** A button settings shows while the provider is enabled, e.g. to open a sign-in window. */
+  action?: { label: string; run(): Promise<unknown> };
   fetch(ctx: { key?: string }): Promise<UsageSnapshot>;
 }

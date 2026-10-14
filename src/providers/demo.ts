@@ -23,6 +23,7 @@ const samples: Record<string, () => Omit<UsageSnapshot, 'fetchedAt'>> = {
   antigravity: () => ({
     bars: [bar('Pro', 40, 3 * H, 5 * H), bar('Flash', 12, 3 * H, 5 * H), bar('Claude', 75, 1 * H, 5 * H)],
   }),
+  gemini: () => ({ bars: [bar('5h', 45, 2 * H, 5 * H), bar('7d', 18, 4 * D, 7 * D)] }),
   cursor: () => ({ bars: [bar('Month', 54, 12 * D, 30 * D)] }),
   copilot: () => ({ bars: [bar('Month', 31, 18 * D, 30 * D)] }),
   zai: () => ({ bars: [bar('5h', 22, 4 * H, 5 * H), bar('7d', 35, 5 * D, 7 * D)] }),

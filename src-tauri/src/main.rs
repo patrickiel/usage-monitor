@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod gemini;
 mod probes;
 mod update;
 
@@ -223,7 +224,7 @@ fn main() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(update::Pending::default())
-        .invoke_handler(tauri::generate_handler![probes::read_vscdb, probes::gh_token, probes::antigravity_client, probes::antigravity_status, update::check_update, update::install_update])
+        .invoke_handler(tauri::generate_handler![probes::read_vscdb, probes::gh_token, probes::antigravity_client, probes::antigravity_status, gemini::gemini_usage, gemini::gemini_sign_in, update::check_update, update::install_update])
         .setup(|app| {
             let menu = Menu::with_items(
                 app,

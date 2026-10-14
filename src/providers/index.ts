@@ -3,13 +3,14 @@ import type { Config } from '../lib/config';
 import { claude } from './claude';
 import { codex } from './codex';
 import { antigravity } from './antigravity';
+import { gemini } from './gemini';
 import { cursor } from './cursor';
 import { copilot } from './copilot';
 import { zai } from './zai';
 import { kimi } from './kimi';
 import { withDemoData } from './demo';
 
-const registered: Provider[] = [claude, codex, antigravity, cursor, copilot, zai, kimi];
+const registered: Provider[] = [claude, codex, antigravity, gemini, cursor, copilot, zai, kimi];
 
 /** Every registered provider; settings lists these with an on/off toggle. */
 export const providers: Provider[] = import.meta.env.VITE_DEMO === '1' ? withDemoData(registered) : registered;

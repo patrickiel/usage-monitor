@@ -250,6 +250,17 @@
                     class={[field, 'ml-6 py-1 font-mono text-xs']}
                   />
                 {/if}
+                {#if p.action && providerEnabled(config, p)}
+                  <!-- Own line, so the toggle above stays at the right edge. -->
+                  <div class="basis-full pl-6">
+                    <button
+                      onclick={() => p.action!.run()}
+                      class={['rounded border px-2 py-0.5 text-xs transition-colors', unselected]}
+                    >
+                      {p.action.label}
+                    </button>
+                  </div>
+                {/if}
               </li>
             {/each}
           </ul>

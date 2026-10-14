@@ -1,7 +1,7 @@
 # Usage Monitor
 
 A small Windows overlay that shows AI coding plan rate limits (Claude Code, Codex, Antigravity,
-Cursor, GitHub Copilot, z.ai GLM, Kimi Code) on top of the taskbar.
+the Gemini app, Cursor, GitHub Copilot, z.ai GLM, Kimi Code) on top of the taskbar.
 It lives in the system tray; there is no main window.
 
 Built with Tauri 2, Svelte 5 and Tailwind 4.
@@ -31,6 +31,11 @@ Antigravity
 - Otherwise `cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels` with the OAuth token
   from Antigravity's `state.vscdb`. If it has expired it is refreshed in memory, with the OAuth
   client read from the installed Antigravity CLI (`agy`) or IDE.
+
+Gemini app (gemini.google.com, separate from Antigravity's quota)
+- There is no API: a hidden webview loads `gemini.google.com/usage` and reads the 5-hour and
+  weekly limits from the page. Sign in once with the button in settings; the session lives in the
+  app's own WebView2 profile. Refreshed at most every 2 minutes.
 
 Cursor
 - `GET cursor.com/api/usage-summary` with the session token from Cursor's `state.vscdb`.
