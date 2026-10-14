@@ -9,7 +9,8 @@ Built with Tauri 2, Svelte 5 and Tailwind 4.
 ![Overlay on the taskbar](docs/overlay.png)
 
 Each row is one limit window: used percentage and time until it resets. Bars turn amber at 70%
-and red at 90%. An optional pace marker shows how much of the window has elapsed.
+and red at 90%. An optional pace marker shows how much of the window has elapsed. The bars can be hidden
+globally or per provider, leaving just the percentages and reset times.
 
 ![Settings](docs/settings.png)
 

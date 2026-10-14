@@ -146,6 +146,15 @@
     drag.offset = Math.min(max, Math.max(min, e.clientY - drag.startY));
   }
 
+  // Per-provider bar visibility: 'default' follows the global setting (and drops the override).
+  const barOverride = (id: string) => (config?.bars[id] == null ? 'default' : config.bars[id] ? 'on' : 'off');
+
+  function setBarOverride(id: string, value: string) {
+    if (!config) return;
+    if (value === 'default') delete config.bars[id];
+    else config.bars[id] = value === 'on';
+  }
+
   async function toggleAutostart() {
     await (autostart ? enable() : disable());
   }
@@ -233,6 +242,24 @@
                   <span class="flex items-center gap-2">
                     <p.icon size="1.2em" color={p.accent ?? 'currentColor'} />{p.name}
                   </span>
+                  {#if providerEnabled(config, p)}
+                    <select
+                      aria-label="Bars for {p.name}"
+                      title="Bars for {p.name}"
+                      value={barOverride(p.id)}
+                      onchange={(e) => setBarOverride(p.id, e.currentTarget.value)}
+                      class={[
+                        'mr-2 ml-auto cursor-pointer rounded border border-transparent bg-transparent px-1 py-0.5 text-xs outline-none',
+                        'text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-800 focus:border-neutral-400',
+                        'dark:text-neutral-400 dark:hover:border-neutral-700 dark:hover:text-neutral-200 dark:focus:border-neutral-500',
+                        '[&>option]:bg-white [&>option]:text-neutral-800 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-neutral-200',
+                      ]}
+                    >
+                      <option value="default">Bars: {config.showBars ? 'on' : 'off'} (default)</option>
+                      <option value="on">Bars: on</option>
+                      <option value="off">Bars: off</option>
+                    </select>
+                  {/if}
                   <input
                     type="checkbox"
                     checked={providerEnabled(config, p)}
@@ -312,6 +339,10 @@
           </div>
         {/each}
 
+        <label class="flex items-center justify-between" title="Providers can override this in their row">
+          <span>Show bars</span>
+          <input type="checkbox" bind:checked={config.showBars} class="size-4 accent-emerald-500" />
+        </label>
         <label
           class="flex items-center justify-between"
           title="Tick on each bar marking how much of the window has elapsed"

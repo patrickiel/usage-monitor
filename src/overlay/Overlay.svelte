@@ -8,7 +8,7 @@
   import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
   import { ordered, providerEnabled } from '../providers';
   import type { Provider, UsageSnapshot } from '../providers/types';
-  import { loadConfig, onConfigChanged, type Config } from '../lib/config';
+  import { barsShown, loadConfig, onConfigChanged, type Config } from '../lib/config';
   import { place } from '../lib/placement';
   import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
@@ -186,35 +186,38 @@
           </div>
 
           {#if s?.bars.length}
+            {@const showBars = barsShown(config, p.id)}
             <!-- One row per limit: label · bar (optional pace tick) · percent · reset.
                  Past `maxRows`, limits continue in another column. -->
             <div class="flex items-center gap-3">
               {#each columns(s.bars.map((b) => current(b, now)), config.maxRows) as column, c (c)}
                 <div
                   class="grid items-center gap-x-1.5 gap-y-[3px]"
-                  style:grid-template-columns="auto {config.barWidth}px{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
+                  style:grid-template-columns="auto{showBars ? ` ${config.barWidth}px` : ''}{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
                 >
                   {#each column as bar (bar.label)}
                     {@const sev = severity(bar.percent)}
                     {@const color = barColors[sev]}
                     {@const tick = config.showPace ? pace(bar, now) : null}
                     <span class="text-neutral-500 dark:text-white/45">{bar.label}</span>
-                    <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
-                      <div
-                        class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
-                        style:width="{Math.min(100, bar.percent)}%"
-                        style:background-color={color}
-                        style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
-                      ></div>
-                      {#if tick != null}
+                    {#if showBars}
+                      <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
                         <div
-                          class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2"
-                          style:left="{tick}%"
-                          style:background-color={paceColor(bar.percent, tick)}
-                          style:box-shadow="0 0 0 1px var(--pace-outline)"
+                          class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
+                          style:width="{Math.min(100, bar.percent)}%"
+                          style:background-color={color}
+                          style:box-shadow={sev === 'ok' ? undefined : `0 0 6px ${color}`}
                         ></div>
-                      {/if}
-                    </div>
+                        {#if tick != null}
+                          <div
+                            class="absolute -inset-y-0.5 w-0.5 -translate-x-1/2"
+                            style:left="{tick}%"
+                            style:background-color={paceColor(bar.percent, tick)}
+                            style:box-shadow="0 0 0 1px var(--pace-outline)"
+                          ></div>
+                        {/if}
+                      </div>
+                    {/if}
                     {#if config.showPercent}
                       <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
                         {Math.round(bar.percent)}%

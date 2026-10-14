@@ -26,6 +26,8 @@ export interface Config {
   refreshSeconds: number;
   /** Tick on each bar marking how much of the window has elapsed. */
   showPace: boolean;
+  /** The progress bars themselves; without them the rows are just label, percent and time. */
+  showBars: boolean;
   /** Percentage column next to each bar. */
   showPercent: boolean;
   /** Reset countdown column (and extra usage $ amounts). */
@@ -35,6 +37,8 @@ export interface Config {
   order: string[];
   /** Provider id → enabled. Missing ids use the provider's default. */
   providers: Record<string, boolean>;
+  /** Provider id → show bars, overriding `showBars`. Missing ids follow it. */
+  bars: Record<string, boolean>;
   /** Provider id → API key, for providers that need one. */
   keys: Record<string, string>;
 }
@@ -51,11 +55,13 @@ export const defaults: Config = {
   opacity: 0,
   refreshSeconds: 120,
   showPace: false,
+  showBars: true,
   showPercent: true,
   showTimes: true,
   theme: 'auto',
   order: [],
   providers: {},
+  bars: {},
   keys: {},
 };
 
@@ -75,6 +81,9 @@ export async function saveConfig(config: Config): Promise<void> {
   await s.save();
   await emit(CHANGED, config);
 }
+
+/** Whether `providerId` draws its bars: its own override, else the global setting. */
+export const barsShown = (config: Config, providerId: string) => config.bars[providerId] ?? config.showBars;
 
 export const onConfigChanged = (fn: (config: Config) => void) =>
   listen<Config>(CHANGED, (e) => fn(e.payload));
