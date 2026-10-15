@@ -32,6 +32,8 @@ export interface Config {
   showPercent: boolean;
   /** Reset countdown column (and extra usage $ amounts). */
   showTimes: boolean;
+  /** Row labels as their first letter: "S" for Session, "W" for Week. */
+  shortLabels: boolean;
   theme: Theme;
   /** Provider ids in display order (drag to reorder in settings). */
   order: string[];
@@ -58,6 +60,7 @@ export const defaults: Config = {
   showBars: true,
   showPercent: true,
   showTimes: true,
+  shortLabels: false,
   theme: 'auto',
   order: [],
   providers: {},

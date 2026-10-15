@@ -358,6 +358,10 @@
           <span>Show times</span>
           <input type="checkbox" bind:checked={config.showTimes} class="size-4 accent-emerald-500" />
         </label>
+        <label class="flex items-center justify-between" title="S for Session, W for Week, and so on">
+          <span>Short labels</span>
+          <input type="checkbox" bind:checked={config.shortLabels} class="size-4 accent-emerald-500" />
+        </label>
       </section>
     </div>
 

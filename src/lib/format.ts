@@ -10,9 +10,10 @@ export function countdown(date: Date, now: number): string {
 
 const NAMES: Record<string, string> = { '5h': 'Session', '7d': 'Week' };
 
-/** Row label as shown: the usual session and weekly windows by name, anything else as is. */
-export function barName(label: string): string {
-  return NAMES[label] ?? label;
+/** Row label as shown: the usual session and weekly windows by name, anything else as is; `short` keeps the first letter. */
+export function barName(label: string, short: boolean): string {
+  const name = NAMES[label] ?? label;
+  return short ? name.charAt(0).toUpperCase() : name;
 }
 
 /** A window whose reset time has passed has reset: show it empty (cached data can outlive it). */
