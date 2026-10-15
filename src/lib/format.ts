@@ -8,6 +8,13 @@ export function countdown(date: Date, now: number): string {
   return `${Math.round(mins / 1440)}d`;
 }
 
+const NAMES: Record<string, string> = { '5h': 'Session', '7d': 'Week' };
+
+/** Row label as shown: the usual session and weekly windows by name, anything else as is. */
+export function barName(label: string): string {
+  return NAMES[label] ?? label;
+}
+
 /** A window whose reset time has passed has reset: show it empty (cached data can outlive it). */
 export function current(bar: LimitBar, now: number): LimitBar {
   return bar.resetsAt && bar.resetsAt.getTime() <= now ? { label: bar.label, percent: 0 } : bar;

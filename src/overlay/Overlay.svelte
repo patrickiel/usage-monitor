@@ -11,7 +11,7 @@
   import { place } from '../lib/placement';
   import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
-  import { ago, barColors, columns, countdown, current, pace, paceColor, problem, severity } from '../lib/format';
+  import { ago, barColors, barName, columns, countdown, current, pace, paceColor, problem, severity } from '../lib/format';
 
   /** Data older than this gets an age note even without an error. */
   const STALE_MS = 10 * 60 * 1000;
@@ -244,7 +244,7 @@
                     {@const sev = severity(bar.percent)}
                     {@const color = barColors[sev]}
                     {@const tick = config.showPace ? pace(bar, now) : null}
-                    <span class="text-neutral-500 dark:text-white/45">{bar.label}</span>
+                    <span class="text-right text-neutral-500 dark:text-white/45">{barName(bar.label)}</span>
                     {#if showBars}
                       <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
                         <div
