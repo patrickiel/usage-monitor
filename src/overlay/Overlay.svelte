@@ -11,12 +11,27 @@
   import { place } from '../lib/placement';
   import { setTheme } from '../lib/theme';
   import { loadCached, saveCached } from '../lib/cache';
-  import { ago, barColors, barName, columns, countdown, current, pace, paceColor, problem, severity } from '../lib/format';
+  import { ago, barColors, barName, columns, countdown, current, pace, paceColor, percentText, problem, severity } from '../lib/format';
 
   /** Data older than this gets an age note even without an error. */
   const STALE_MS = 10 * 60 * 1000;
   /** How long each note under a provider icon shows before the next takes its turn. */
   const NOTE_MS = 4000;
+
+  /** Rough width of one digit of the in-bar percentage (8.5px Tahoma bold), plus breathing room. */
+  const DIGIT_PX = 5;
+  const LABEL_PAD_PX = 2;
+
+  /** Where the in-bar percentage goes: centred on the whole bar, unless the fill edge would cut
+   *  through it; then centred in the larger of the fill and the empty part. As left/right insets in %. */
+  function labelSpot(percent: number, barPx: number) {
+    const fill = Math.min(100, percent);
+    const edge = (fill / 100) * barPx;
+    const half = (percentText(percent).length * DIGIT_PX + LABEL_PAD_PX) / 2;
+    if (edge >= barPx / 2 + half) return { left: 0, right: 0, inFill: true };
+    if (edge <= barPx / 2 - half) return { left: 0, right: 0, inFill: false };
+    return fill >= 50 ? { left: 0, right: 100 - fill, inFill: true } : { left: fill, right: 0, inFill: false };
+  }
 
   type Note = { key: string; text: string | number; icon?: typeof ClockCounterClockwiseIcon; class: string };
 
@@ -88,13 +103,27 @@
 
   const refresh = () => Promise.all(active.map(refreshOne));
 
+  /** A click on the overlay (screen px; the window itself is click-through) refreshes the provider
+   *  under it, or all of them when it lands between providers. */
+  async function clicked([x, y]: [number, number]) {
+    const pos = await getCurrentWindow().innerPosition();
+    const el = document.elementFromPoint((x - pos.x) / devicePixelRatio, (y - pos.y) / devicePixelRatio);
+    const id = el?.closest<HTMLElement>('[data-provider]')?.dataset.provider;
+    const p = active.find((p) => p.id === id);
+    return p ? refreshOne(p) : refresh();
+  }
+
   onMount(() => {
     // Cache first, so polling (which waits for config) starts from the last known data.
     Promise.all([loadConfig(), loadCached()]).then(([c, cached]) => {
       snapshots = { ...cached, ...snapshots };
       config = c;
     });
-    const unlisten = [onConfigChanged((c) => (config = c)), listen('refresh', refresh)];
+    const unlisten = [
+      onConfigChanged((c) => (config = c)),
+      listen('refresh', refresh),
+      listen<[number, number]>('overlay-click', (e) => clicked(e.payload)),
+    ];
     const clock = setInterval(() => (now = Date.now()), 1000);
     return () => {
       clearInterval(clock);
@@ -160,7 +189,7 @@
         {@const s = snapshots[p.id]}
         {#if i}<div class="h-7 w-px bg-black/10 dark:bg-white/10"></div>{/if}
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" data-provider={p.id}>
           <!-- Provider: icon, then only what needs attention (stale/error, resets left). -->
           <div class="flex flex-col items-center gap-1">
             <!-- Refreshing: the icon dims under a thin ring, positioned outside the flow so nothing shifts. -->
@@ -238,15 +267,16 @@
               {#each columns(s.bars.map((b) => current(b, now)), config.maxRows) as column, c (c)}
                 <div
                   class="grid items-center gap-x-1.5 gap-y-[3px]"
-                  style:grid-template-columns="auto{showBars ? ` ${config.barWidth}px` : ''}{config.showPercent ? ' auto' : ''}{config.showTimes ? ' auto' : ''}"
+                  style:grid-template-columns="auto {showBars ? `${config.barWidth}px` : 'auto'}{config.showTimes ? ' auto' : ''}"
                 >
                   {#each column as bar (bar.label)}
                     {@const sev = severity(bar.percent)}
                     {@const color = barColors[sev]}
                     {@const tick = config.showPace ? pace(bar, now) : null}
+                    {@const percentShown = config.barPercent === 'always' || (config.barPercent === 'high' && sev === 'crit')}
                     <span class="text-right text-neutral-500 dark:text-white/45">{barName(bar.label, config.shortLabels)}</span>
                     {#if showBars}
-                      <div class="relative bg-black/10 dark:bg-white/10" style:height="{config.barHeight}px">
+                      <div class="relative h-2.5 bg-black/10 dark:bg-white/10">
                         <div
                           class={['h-full', bar.percent > 0 && 'min-w-[3px]']}
                           style:width="{Math.min(100, bar.percent)}%"
@@ -261,11 +291,23 @@
                             style:box-shadow="0 0 0 1px var(--pace-outline)"
                           ></div>
                         {/if}
+                        {#if percentShown}
+                          <!-- Tahoma: hinted for tiny screen sizes, unlike the monospace used elsewhere. -->
+                          {@const spot = labelSpot(bar.percent, config.barWidth)}
+                          <span
+                            class="absolute inset-y-0 flex items-center justify-center font-[Tahoma,Verdana,sans-serif] text-[8.5px] font-bold"
+                            style:left="{spot.left}%"
+                            style:right="{spot.right}%"
+                            style:color={spot.inFill ? 'var(--bar-text)' : sev === 'ok' ? undefined : color}
+                          >
+                            {percentText(bar.percent)}
+                          </span>
+                        {/if}
                       </div>
                     {/if}
-                    {#if config.showPercent}
+                    {#if !showBars}
                       <span class="text-right" style:color={sev === 'ok' ? undefined : color}>
-                        {Math.round(bar.percent)}%
+                        {percentText(bar.percent)}%
                       </span>
                     {/if}
                     {#if config.showTimes}

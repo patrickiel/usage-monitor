@@ -7,6 +7,9 @@ export type Anchor =
   | 'middle-left' | 'middle-center' | 'middle-right'
   | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
+/** When a bar shows its percentage: always, once the limit is critical (90%+), or never. */
+export type BarPercent = 'always' | 'high' | 'never';
+
 export interface Config {
   /** Monitor name; empty means the primary monitor. */
   monitor: string;
@@ -16,8 +19,6 @@ export interface Config {
   offsetY: number;
   /** Width of a single bar in logical px. */
   barWidth: number;
-  /** Bar thickness in logical px. */
-  barHeight: number;
   /** Rows per column; a provider with more bars continues in another column. */
   maxRows: number;
   scale: number;
@@ -26,10 +27,10 @@ export interface Config {
   refreshSeconds: number;
   /** Tick on each bar marking how much of the window has elapsed. */
   showPace: boolean;
-  /** The progress bars themselves; without them the rows are just label, percent and time. */
+  /** Bars, or just the percentage in their place. Providers can override it in `bars`. */
   showBars: boolean;
-  /** Percentage column next to each bar. */
-  showPercent: boolean;
+  /** Rows without bars always show the percentage; this is only for the ones with. */
+  barPercent: BarPercent;
   /** Reset countdown column (and extra usage $ amounts). */
   showTimes: boolean;
   /** Row labels as their first letter: "S" for Session, "W" for Week. */
@@ -51,14 +52,13 @@ export const defaults: Config = {
   offsetX: 0,
   offsetY: 0,
   barWidth: 48,
-  barHeight: 7,
   maxRows: 3,
   scale: 1,
   opacity: 0,
   refreshSeconds: 120,
   showPace: false,
   showBars: true,
-  showPercent: true,
+  barPercent: 'high',
   showTimes: true,
   shortLabels: false,
   theme: 'auto',
@@ -72,7 +72,9 @@ const CHANGED = 'config-changed';
 const store = load('config.json', { defaults: {}, autoSave: false });
 
 export async function loadConfig(): Promise<Config> {
-  const saved = (await (await store).get<Partial<Config>>('config')) ?? {};
+  const saved = (await (await store).get<Partial<Config> & { showPercent?: boolean }>('config')) ?? {};
+  // Up to 0.5 percentages were on/off; off keeps the bars bare.
+  if (saved.showPercent === false) saved.barPercent ??= 'never';
   // Only known keys, so settings removed in later versions drop out.
   const known = Object.entries(saved).filter(([k]) => k in defaults);
   return { ...defaults, ...Object.fromEntries(known) };

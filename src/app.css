@@ -14,6 +14,8 @@
   --pace-warn: #7c3aed;
   --pace-crit: #db2777;
   --pace-outline: #fafafa;
+  /* Percentage drawn on the bar fill. */
+  --bar-text: #ffffff;
 }
 
 :root.dark {
@@ -25,6 +27,7 @@
   --pace-warn: #a78bfa;
   --pace-crit: #f472b6;
   --pace-outline: #101012;
+  --bar-text: #101012;
 }
 
 html,

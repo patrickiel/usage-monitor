@@ -62,6 +62,9 @@ export function severity(percent: number): Severity {
   return percent >= 90 ? 'crit' : percent >= 70 ? 'warn' : 'ok';
 }
 
+/** Whole percent, with a decimal from 97% up where every bit of headroom counts. */
+export const percentText = (percent: number) => (percent >= 97 ? percent.toFixed(1) : String(Math.round(percent)));
+
 /**
  * Pace marker color, blended continuously from the usage projected to the end of the window:
  * sky at 0%, violet at 100% (on track to hit the limit exactly), pink at 130%+.

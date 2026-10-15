@@ -74,7 +74,7 @@ mod topmost {
 
     static OVERLAY: AtomicIsize = AtomicIsize::new(0);
     static BURST: OnceLock<Sender<()>> = OnceLock::new();
-    static ON_CLICK: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+    static ON_CLICK: OnceLock<Box<dyn Fn(i32, i32) + Send + Sync>> = OnceLock::new();
 
     /// The foreground window, if it covers the whole of the overlay's monitor (a fullscreen video,
     /// game or presentation). The desktop is excluded: it covers the monitor too.
@@ -148,9 +148,10 @@ mod topmost {
             ) {
                 burst();
             }
-            if msg == WM_LBUTTONUP && on_overlay((*(lparam as *const MSLLHOOKSTRUCT)).pt) {
+            let pt = (*(lparam as *const MSLLHOOKSTRUCT)).pt;
+            if msg == WM_LBUTTONUP && on_overlay(pt) {
                 if let Some(f) = ON_CLICK.get() {
-                    f();
+                    f(pt.x, pt.y);
                 }
             }
         }
@@ -180,8 +181,8 @@ mod topmost {
     }
 
     /// Call on the main thread: out-of-context and low-level hooks are delivered through its message loop.
-    /// `on_click` runs (on that thread) when the overlay is left-clicked.
-    pub fn install(hwnd: isize, on_click: impl Fn() + Send + Sync + 'static) {
+    /// `on_click` runs (on that thread) when the overlay is left-clicked, with the screen point.
+    pub fn install(hwnd: isize, on_click: impl Fn(i32, i32) + Send + Sync + 'static) {
         OVERLAY.store(hwnd, Ordering::Relaxed);
         let _ = BURST.set(spawn_raiser());
         let _ = ON_CLICK.set(Box::new(on_click));
@@ -274,8 +275,9 @@ fn main() {
             #[cfg(windows)]
             {
                 let app = app.handle().clone();
-                topmost::install(overlay.hwnd()?.0 as isize, move || {
-                    let _ = app.emit("refresh", ());
+                // The overlay works out which provider was hit and refreshes just that one.
+                topmost::install(overlay.hwnd()?.0 as isize, move |x, y| {
+                    let _ = app.emit("overlay-click", (x, y));
                 });
             }
             watch(tray, light);

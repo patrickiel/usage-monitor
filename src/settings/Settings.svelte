@@ -12,7 +12,7 @@
   import { availableMonitors, getCurrentWindow, primaryMonitor, type Monitor } from '@tauri-apps/api/window';
   import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
   import { ordered, providerEnabled } from '../providers';
-  import { defaults, loadConfig, saveConfig, type Anchor, type Config } from '../lib/config';
+  import { barsShown, defaults, loadConfig, saveConfig, type Anchor, type BarPercent, type Config } from '../lib/config';
   import { setTheme, type Theme } from '../lib/theme';
 
   const anchors: Anchor[] = [
@@ -27,12 +27,22 @@
     { value: 'dark', label: 'Dark', icon: MoonIcon },
   ] as const satisfies { value: Theme; label: string; icon: unknown }[];
 
-  type NumberKey = 'scale' | 'barWidth' | 'barHeight' | 'maxRows' | 'opacity' | 'refreshSeconds';
+  const usageModes = [
+    { value: true, label: 'Bars' },
+    { value: false, label: 'Percent' },
+  ] as const;
+
+  const barPercents = [
+    { value: 'always', label: 'Always', hint: 'Every bar shows its percentage.' },
+    { value: 'high', label: '90%+', hint: 'A bar shows its percentage once it reaches 90%.' },
+    { value: 'never', label: 'Never', hint: 'Bars never show a percentage.' },
+  ] as const satisfies { value: BarPercent; label: string; hint: string }[];
+
+  type NumberKey = 'scale' | 'barWidth' | 'maxRows' | 'opacity' | 'refreshSeconds';
 
   const sliders: { key: NumberKey; label: string; min: number; max: number; step: number; format: (v: number) => string }[] = [
     { key: 'scale', label: 'Scale', min: 0.75, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)}×` },
     { key: 'barWidth', label: 'Bar width', min: 24, max: 120, step: 2, format: (v) => `${v}px` },
-    { key: 'barHeight', label: 'Bar thickness', min: 2, max: 10, step: 1, format: (v) => `${v}px` },
     { key: 'maxRows', label: 'Max rows', min: 1, max: 6, step: 1, format: (v) => `${v}` },
     { key: 'opacity', label: 'Background', min: 0, max: 1, step: 0.05, format: (v) => `${Math.round(v * 100)}%` },
     { key: 'refreshSeconds', label: 'Refresh every', min: 30, max: 600, step: 15, format: (v) => `${v}s` },
@@ -42,6 +52,7 @@
   const heading = 'text-xs font-semibold tracking-wider text-neutral-500 uppercase';
   const field =
     'w-full rounded-md border border-neutral-300 bg-neutral-50 px-2 outline-none focus:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:focus:border-neutral-500';
+  const hint = 'text-xs text-neutral-500 dark:text-neutral-400';
   const selected = 'border-emerald-500 bg-emerald-500/20 dark:border-emerald-400 dark:bg-emerald-400/25';
   const unselected =
     'border-neutral-300 bg-neutral-100 hover:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-neutral-500';
@@ -155,6 +166,9 @@
     else config.bars[id] = value === 'on';
   }
 
+  /** Whether any enabled provider draws bars; if none does, "Percent on bars" has nothing to act on. */
+  const anyBars = $derived(!!config && ordered(config.order).some((p) => providerEnabled(config!, p) && barsShown(config!, p.id)));
+
   async function toggleAutostart() {
     await (autostart ? enable() : disable());
   }
@@ -244,8 +258,8 @@
                   </span>
                   {#if providerEnabled(config, p)}
                     <select
-                      aria-label="Bars for {p.name}"
-                      title="Bars for {p.name}"
+                      aria-label="Usage display for {p.name}"
+                      title="Usage display for {p.name}"
                       value={barOverride(p.id)}
                       onchange={(e) => setBarOverride(p.id, e.currentTarget.value)}
                       class={[
@@ -255,9 +269,9 @@
                         '[&>option]:bg-white [&>option]:text-neutral-800 dark:[&>option]:bg-neutral-800 dark:[&>option]:text-neutral-200',
                       ]}
                     >
-                      <option value="default">Bars: {config.showBars ? 'on' : 'off'} (default)</option>
-                      <option value="on">Bars: on</option>
-                      <option value="off">Bars: off</option>
+                      <option value="default">{config.showBars ? 'Bars' : 'Percent'} (default)</option>
+                      <option value="on">Bars</option>
+                      <option value="off">Percent</option>
                     </select>
                   {/if}
                   <input
@@ -339,20 +353,56 @@
           </div>
         {/each}
 
-        <label class="flex items-center justify-between" title="Providers can override this in their row">
-          <span>Show bars</span>
-          <input type="checkbox" bind:checked={config.showBars} class="size-4 accent-emerald-500" />
-        </label>
+        <div class="space-y-1">
+          <div class="flex items-center justify-between gap-3">
+            <span>Show usage as</span>
+            <div class="flex gap-1" role="radiogroup" aria-label="Show usage as">
+              {#each usageModes as m (m.label)}
+                <button
+                  role="radio"
+                  aria-checked={config.showBars === m.value}
+                  onclick={() => (config!.showBars = m.value)}
+                  class={[
+                    'w-16 rounded border py-0.5 text-xs transition-colors',
+                    config.showBars === m.value ? selected : unselected,
+                  ]}
+                >
+                  {m.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+          <p class={hint}>Providers can override this in their row.</p>
+        </div>
+        <div class={['space-y-1 transition-opacity', !anyBars && 'opacity-40']}>
+          <div class="flex items-center justify-between gap-3">
+            <span>Percent on bars</span>
+            <div class="flex gap-1" role="radiogroup" aria-label="Percent on bars">
+              {#each barPercents as m (m.value)}
+                <button
+                  role="radio"
+                  aria-checked={config.barPercent === m.value}
+                  onclick={() => (config!.barPercent = m.value)}
+                  class={[
+                    'w-16 rounded border py-0.5 text-xs transition-colors',
+                    config.barPercent === m.value ? selected : unselected,
+                  ]}
+                >
+                  {m.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+          <p class={hint}>
+            {anyBars ? barPercents.find((m) => m.value === config!.barPercent)?.hint : 'No provider shows bars.'}
+          </p>
+        </div>
         <label
-          class="flex items-center justify-between"
+          class={['flex items-center justify-between transition-opacity', !anyBars && 'opacity-40']}
           title="Tick on each bar marking how much of the window has elapsed"
         >
           <span>Pace marker</span>
           <input type="checkbox" bind:checked={config.showPace} class="size-4 accent-emerald-500" />
-        </label>
-        <label class="flex items-center justify-between">
-          <span>Show percentages</span>
-          <input type="checkbox" bind:checked={config.showPercent} class="size-4 accent-emerald-500" />
         </label>
         <label class="flex items-center justify-between">
           <span>Show times</span>
