@@ -1,5 +1,5 @@
-import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon';
 import { invoke } from '@tauri-apps/api/core';
+import GeminiIcon from '../icons/GeminiIcon.svelte';
 import type { LimitBar, Provider, UsageSnapshot } from './types';
 
 /**
@@ -71,8 +71,7 @@ async function scrape(): Promise<UsageSnapshot> {
 export const gemini: Provider = {
   id: 'gemini',
   name: 'Gemini',
-  icon: SparkleIcon,
-  accent: '#8e75ff',
+  icon: GeminiIcon,
   defaultEnabled: false,
   action: { label: 'Sign in to Google', run: () => invoke('gemini_sign_in') },
   async fetch() {
